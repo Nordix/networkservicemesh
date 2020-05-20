@@ -1,4 +1,5 @@
-// Copyright 2019 VMware, Inc.
+// Copyright 2020 Ericsson Software Technology.
+//
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -84,11 +85,24 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	if err = o.remoteConnect.CreateInterface(ifaceName, remoteConnection, direction); err != nil {
+	ovsPortName := "tap_" + connID
+	if err = CreateInterfaces(ifaceName, ovsPortName); err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
 	}
 
+	vni, ovsTunnelName, err := o.remoteConnect.CreateTunnelInterface(remoteConnection, direction)
+	if  err != nil {
+		logrus.Errorf("remote: %v", err)
+		return nil, err
+	}
+
+	if err = o.remoteConnect.SetupOvSConnection(ovsPortName, ovsTunnelName, vni); err !=nil {
+		logrus.Errorf("remote: %v", err)
+		return nil, err
+	}
+
+	SetInterfacesUp(ovsPortName)
 	if nsInode, err = SetupInterface(ifaceName, localConnection, direction == INCOMING); err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
@@ -114,11 +128,23 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	nsInode, localErr := ClearInterfaceSetup(ifaceName, localConnection)
-	remoteErr := o.remoteConnect.DeleteInterface(ifaceName, remoteConnection)
+	ovsPortName := "tap_" + connID
+	vni, ovsTunnelName , err := o.remoteConnect.GetTunnelParameters(remoteConnection, direction)
+	if  err != nil {
+		logrus.Errorf("remote: %v", err)
+		return nil, err
+	}
+	o.remoteConnect.DeleteLocalOvSConnection(ovsPortName, ovsTunnelName, vni)
 
+	nsInode, localErr := ClearInterfaceSetup(ifaceName, localConnection)
+	remoteErr := DeleteInterface(ifaceName)
+	
 	if localErr != nil || remoteErr != nil {
-		return nil, errors.Errorf("remote: %v - %v", localErr, remoteErr)
+		logrus.Errorf("remote: %v - %v", localErr, remoteErr)
+	}
+
+	if err := o.remoteConnect.DeleteTunnelInterface(ovsTunnelName, remoteConnection); err != nil {
+		logrus.Errorf("remote: %v", err)
 	}
 
 	logrus.Infof("remote: deletion completed for device - %s", ifaceName)

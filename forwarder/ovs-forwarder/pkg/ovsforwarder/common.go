@@ -1,4 +1,5 @@
-// Copyright 2019 VMware, Inc.
+// Copyright 2020 Ericsson Software Technology.
+//
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +28,10 @@ import (
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/common"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connectioncontext"
 	"github.com/networkservicemesh/networkservicemesh/utils/fs"
+)
+
+const (
+	cVETHMTU = 16000
 )
 
 // SetupInterface - setup interface to namespace
@@ -247,6 +252,41 @@ func addNeighbors(link netlink.Link, neighbors []*connectioncontext.IpNeighbor) 
 			logrus.Error("common: failed adding neighbor:", err)
 			return err
 		}
+	}
+	return nil
+}
+
+// CreateInterfaces - creates local interfaces pair
+func CreateInterfaces(srcName, srcOvSPortName string) error {
+	/* Create the VETH pair - host namespace */
+	if err := netlink.LinkAdd(newVETH(srcName, srcOvSPortName)); err != nil {
+		return errors.Errorf("failed to create VETH pair - %v", err)
+	}
+	return nil
+}
+
+func newVETH(srcName, dstName string) *netlink.Veth {
+	/* Populate the VETH interface configuration */
+	return &netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: srcName,
+			MTU:  cVETHMTU,
+		},
+		PeerName: dstName,
+	}
+}
+
+// DeleteInterface - deletes interface
+func DeleteInterface(ifaceName string) error {
+	/* Get a link object for the interface */
+	ifaceLink, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		return errors.Errorf("failed to get link for %q - %v", ifaceName, err)
+	}
+
+	/* Delete the VETH pair - host namespace */
+	if err := netlink.LinkDel(ifaceLink); err != nil {
+		return errors.Errorf("local: failed to delete the VETH pair - %v", err)
 	}
 	return nil
 }

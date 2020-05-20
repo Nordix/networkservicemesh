@@ -1,6 +1,4 @@
-// Copyright (c) 2020 VMware, Inc.
-//
-// Copyright (c) 2020 Doc.ai and/or its affiliates.
+// Copyright 2020 Ericsson Software Technology.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -20,17 +18,20 @@ package remote
 
 import (
 	"net"
+	"strings"
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/vishvananda/netlink"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/vxlan"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
+	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/ovsutils"
 )
 
 // CreateVXLANInterface creates a VXLAN interface
-func (c *Connect) createVXLANInterface(ifaceName string, remoteConnection *connection.Connection, direction uint8) error {
+func (c *Connect) createVXLANInterface(remoteConnection *connection.Connection, direction uint8) (int, string, error) {
 	/* Create interface - host namespace */
 	srcIP := net.ParseIP(remoteConnection.GetMechanism().GetParameters()[vxlan.SrcIP])
 	dstIP := net.ParseIP(remoteConnection.GetMechanism().GetParameters()[vxlan.DstIP])
@@ -45,37 +46,77 @@ func (c *Connect) createVXLANInterface(ifaceName string, remoteConnection *conne
 		localIP = srcIP
 		remoteIP = dstIP
 	}
-
-	if err := netlink.LinkAdd(newVXLAN(ifaceName, localIP, remoteIP, vni)); err != nil {
-		return errors.Wrapf(err, "failed to create VXLAN interface")
+	ovsTunnelName :="v"+strings.ReplaceAll(remoteIP.String(), ".", "")
+	c.vxlanInterfacesMutex.Lock()
+	defer c.vxlanInterfacesMutex.Unlock()
+	if _, exists := c.vxlanInterfaces[ovsTunnelName]; !exists{
+		if err := newVXLAN(ovsTunnelName, localIP, remoteIP); err != nil {
+			return 0, "", errors.Wrapf(err, "failed to create VXLAN interface")
+		}
 	}
+	c.vxlanInterfaces[ovsTunnelName] += 1
+	return vni, ovsTunnelName, nil
+}
+
+func (c *Connect) getVXLANParameters(remoteConnection *connection.Connection, direction uint8) (int, string) {
+	srcIP := net.ParseIP(remoteConnection.GetMechanism().GetParameters()[vxlan.SrcIP])
+	dstIP := net.ParseIP(remoteConnection.GetMechanism().GetParameters()[vxlan.DstIP])
+	vni, _ := strconv.Atoi(remoteConnection.GetMechanism().GetParameters()[vxlan.VNI])
+
+	var remoteIP net.IP
+	if direction == INCOMING {
+		remoteIP = srcIP
+	} else {
+		remoteIP = dstIP
+	}
+	ovsTunnelName :="v"+strings.ReplaceAll(remoteIP.String(), ".", "")
+	
+	return vni, ovsTunnelName
+}
+
+func (c *Connect) deleteVXLANInterface(ovsTunnelName string) error {
+	c.vxlanInterfacesMutex.Lock()
+	defer c.vxlanInterfacesMutex.Unlock()
+	if counter := c.vxlanInterfaces[ovsTunnelName]; counter == 1 {
+		if err := deleteVXLAN(ovsTunnelName); err != nil {
+			return errors.Wrapf(err, "failed to delete VXLAN interface")
+		}
+		delete(PortMap, ovsTunnelName)
+		delete(c.vxlanInterfaces, ovsTunnelName)
+	} else {
+		if exists := c.vxlanInterfaces[ovsTunnelName]; exists != 0 {
+			c.vxlanInterfaces[ovsTunnelName] -= 1
+		}
+	}
+
 	return nil
 }
 
-func (c *Connect) deleteVXLANInterface(ifaceName string) error {
-	/* Get a link object for interface */
-	ifaceLink, err := netlink.LinkByName(ifaceName)
-	if err != nil {
-		return errors.Errorf("failed to get link for %q - %v", ifaceName, err)
-	}
-
-	/* Delete the VXLAN interface - host namespace */
-	if err = netlink.LinkDel(ifaceLink); err != nil {
-		return errors.Errorf("failed to delete VXLAN interface - %v", err)
-	}
-
-	return nil
-}
-
-// newVXLAN returns a VXLAN interface instance
-func newVXLAN(ifaceName string, egressIP, remoteIP net.IP, vni int) *netlink.Vxlan {
+// newVXLAN creates a VXLAN interface instance in OVS
+func newVXLAN(ovsTunnelName string, egressIP, remoteIP net.IP) error {
 	/* Populate the VXLAN interface configuration */
-	return &netlink.Vxlan{
-		LinkAttrs: netlink.LinkAttrs{
-			Name: ifaceName,
-		},
-		VxlanId: vni,
-		Group:   remoteIP,
-		SrcAddr: egressIP,
+	localOptions := "options:local_ip="+egressIP.String()
+    remoteOptions :="options:remote_ip="+remoteIP.String()
+	stdout, stderr, err := util.RunOVSVsctl("--", "--may-exist", "add-port", kernel.BridgeName, ovsTunnelName,
+											"--", "set", "interface", ovsTunnelName, "type=vxlan",localOptions,
+											remoteOptions, "options:key=flow")
+	if err != nil {
+		return errors.Errorf("Failed to add port %s to %s, stdout: %q, stderr: %q,"+
+								" error: %v", ovsTunnelName, kernel.BridgeName, stdout, stderr, err)
 	}
+
+	return nil
+
+}
+
+func deleteVXLAN(ovsTunnelPort string) error {
+	/* Populate the VXLAN interface configuration */
+	stdout, stderr, err := util.RunOVSVsctl("del-port", kernel.BridgeName, ovsTunnelPort)
+	if err != nil {
+		return errors.Errorf("Failed to delete port %s to %s, stdout: %q, stderr: %q,"+
+								" error: %v", ovsTunnelPort, kernel.BridgeName, stdout, stderr, err)
+	}
+
+	return nil
+
 }

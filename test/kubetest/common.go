@@ -12,7 +12,9 @@ func DefaultForwarderVariables(plane string) map[string]string {
 		return DefaultPlaneVariablesVPP()
 	} else if plane == pods.EnvForwardingPlaneKernel {
 		return DefaultPlaneVariablesKernel()
-	}
+	} else if plane == pods.EnvForwardingPlaneOvS {
+                return DefaultPlaneVariablesOvS()
+        }
 	logrus.Error("Forwarding plane error: Unknown forwarder")
 	return nil
 }

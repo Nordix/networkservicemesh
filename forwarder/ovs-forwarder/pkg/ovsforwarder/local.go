@@ -71,17 +71,20 @@ func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossCon
 	srcOvSPortName := srcPrefix + crossConnect.GetId()
 	dstOvSPortName := dstPrefix + crossConnect.GetId()
 
-	if err = o.localConnect.CreateInterfaces(srcName, srcOvSPortName); err != nil {
+	if err = CreateInterfaces(srcName, srcOvSPortName); err != nil {
 		logrus.Errorf("local: %v", err)
 		return nil, err
 	}
 
-	if err = o.localConnect.CreateInterfaces(dstName, dstOvSPortName); err != nil {
+	if err = CreateInterfaces(dstName, dstOvSPortName); err != nil {
 		logrus.Errorf("local: %v", err)
 		return nil, err
 	}
 
-	o.localConnect.SetupLocalOvSConnection(srcOvSPortName, dstOvSPortName)
+	if err = o.localConnect.SetupLocalOvSConnection(srcOvSPortName, dstOvSPortName); err != nil {
+		logrus.Errorf("local: %v", err)
+		return nil, err
+	}
 
 	SetInterfacesUp(srcOvSPortName, dstOvSPortName)
 
@@ -125,8 +128,8 @@ func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossCon
 
 	// somehow ovs ports are visible in host net ns even after deleting srcName and dstName.
 	// hence deleting it using ovs port names.
-	srcErr = o.localConnect.DeleteInterface(srcOvSPortName)
-	dstErr = o.localConnect.DeleteInterface(dstOvSPortName)
+	srcErr = DeleteInterface(srcOvSPortName)
+	dstErr = DeleteInterface(dstOvSPortName)
 
 	if srcErr != nil || dstErr != nil {
 		logrus.Errorf("local: %v - %v", srcErr, dstErr)

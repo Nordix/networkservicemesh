@@ -46,6 +46,7 @@ func TestOvSNSCAndICMPRemoteVXLAN(t *testing.T) {
 	testOvSNSCAndICMP(t, 2, "VXLAN")
 }
 
+
 func testOvSNSCAndICMP(t *testing.T, nodesCount int, remoteMechanism string) {
 	g := NewWithT(t)
 

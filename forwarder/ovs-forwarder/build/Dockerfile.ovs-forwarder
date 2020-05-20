@@ -1,29 +1,41 @@
-FROM alpine:latest
+ARG VENDORING
+ARG GOPROXY
+ARG GO_VERSION
 
+FROM golang:${GO_VERSION}-alpine as build
 
-# Install dependencies
-RUN apk --update add supervisor \
-                     openvswitch \
-                     bash \
-                     net-tools
+ENV GOPROXY=${GOPROXY}
+ENV PACKAGEPATH=github.com/networkservicemesh/networkservicemesh/forwarder
+ENV GO111MODULE=on
+
+RUN mkdir /root/networkservicemesh
+ADD ["./networkservicemesh","/root/networkservicemesh"]
+WORKDIR /root/networkservicemesh/forwarder
+RUN VENDORING=${VENDORING} ../scripts/go-mod-download.sh
+
 
 # ////////////// Open vSwitch Section ////////////// #
+
+# Build ovs-forwarder
+
+RUN CGO_ENABLED=0 GOOS=linux go build ${VENDORING} -ldflags "-extldflags '-static'" -o /go/bin/ovs-forwarder ./ovs-forwarder/cmd/ovs-forwarder.go
+
+FROM alpine as runtime
+COPY --from=build /go/bin/ovs-forwarder /bin/ovs-forwarder
+RUN apk --update add supervisor \
+                     openvswitch
 
 # Create database and pid file directory
 RUN /usr/bin/ovsdb-tool create /etc/openvswitch/conf.db
 RUN mkdir -pv /var/run/openvswitch/
 
-# Build ovs-forwarder
-RUN CGO_ENABLED=0 GOOS=linux go build ${VENDORING} -ldflags "-extldflags '-static'" -o /go/bin/ovs-forwarder ./ovs-forwarder/cmd/ovs-forwarder.go
-
-
-# Add supervisord and ovs configuration files
+# Add configuration files
+ADD run_supervisord.sh /bin/run_supervisord.sh
 ADD supervisord.conf /etc/supervisord.conf
 ADD configure-ovs.sh /usr/share/openvswitch/
 RUN chmod 755 /usr/share/openvswitch/configure-ovs.sh
+RUN chmod +x /bin/run_supervisord.sh
 
-# copy ovs-forwarder binary into bin directory
-COPY --from=build /go/bin/ovs-forwarder /bin/ovs-forwarder
+# When container starts, run_supervisord.sh is executed
+ENTRYPOINT ["/bin/run_supervisord.sh"]
 
-# When container starts, supervisord is executed
-ENTRYPOINT /usr/bin/supervisord

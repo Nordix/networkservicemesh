@@ -6,7 +6,7 @@ import (
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// OvSForwarderPod creates a pod
+// OvsForwarderPod creates a pod
 func OvSForwarderPod(name string, node *v1.Node) *v1.Pod {
 	return createOvSForwarderPod(name, node, nil, nil, nil)
 }
@@ -53,8 +53,8 @@ func createOvSForwarderPod(name string, node *v1.Node, liveness, readiness *v1.P
 			},
 			Containers: []v1.Container{
 				containerMod(&v1.Container{
-					Name:            "OvS-forwarder",
-					Image:           "networkservicemesh/OvS-forwarder:latest",
+					Name:            "ovs-forwarder",
+					Image:           "networkservicemesh/ovs-forwarder:latest",
 					ImagePullPolicy: v1.PullIfNotPresent,
 					VolumeMounts: []v1.VolumeMount{
 						{
