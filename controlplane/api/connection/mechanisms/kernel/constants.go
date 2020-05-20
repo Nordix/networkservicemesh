@@ -19,4 +19,6 @@ const (
 	MemifSocket = "memif.sock"
 	// NsmBaseDirEnv - NSM location directory
 	NsmBaseDirEnv = "NSM_BASE_DIR"
+	// BridgeName integration bridge on which client and endpoint pod can connect with.
+	BridgeName = "br-nsm"
 )

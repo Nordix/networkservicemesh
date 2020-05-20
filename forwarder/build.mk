@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-forwarder_images = vppagent-forwarder kernel-forwarder
+forwarder_images = vppagent-forwarder kernel-forwarder ovs-forwarder
 
 # TODO: files in forwarder doesn't follow the regular structure: ./module/cmd/app,
 # after fixing 'kernel-forwarder' and 'vppagent-forwarder' targets could be eliminated
@@ -21,6 +21,13 @@ go-kernel-forwarder-build: go-%-build:
 	$(info ----------------------  Building forwarder::$* via Cross compile ----------------------)
 	@pushd ./forwarder && \
 	${GO_BUILD} -o $(BIN_DIR)/$*/$* ./kernel-forwarder/cmd/ && \
+	popd
+
+.PHONY: go-ovs-forwarder-build
+go-ovs-forwarder-build: go-%-build:
+	$(info ----------------------  Building forwarder::$* via Cross compile ----------------------)
+	@pushd ./forwarder && \
+	${GO_BUILD} -o $(BIN_DIR)/$*/$* ./ovs-forwarder/cmd/ && \
 	popd
 
 .PHONY: go-vppagent-forwarder-build
@@ -37,6 +44,12 @@ docker-vppagent-forwarder-prepare: docker-%-prepare: go-%-build
 		forwarder/vppagent/conf/supervisord/supervisord.conf \
 		forwarder/vppagent/conf/supervisord/telemetry.conf \
 		forwarder/vppagent/conf/supervisord/govpp.conf)
+
+docker-ovs-forwarder-prepare: docker-%-prepare: go-%-build
+	$(info Preparing files for docker...)
+	$(call docker_prepare, $(BIN_DIR)/$*, \
+		forwarder/ovs-forwarder/build/configure-ovs.sh \
+		forwarder/ovs-forwarder/build/supervisord.conf)
 
 .PHONY: docker-forwarder-list
 docker-forwarder-list:

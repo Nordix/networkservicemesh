@@ -16,6 +16,8 @@ const (
 	EnvForwardingPlaneVPP = "vpp"
 	// EnvForwardingPlaneKernel is the Kernel forwarding plane
 	EnvForwardingPlaneKernel = "kernel-forwarder"
+	// EnvForwardingPlaneOvS is the OvS forwarding plane
+	EnvForwardingPlaneOvS = "ovs"
 	// EnvForwardingPlaneDefault is the default forwarding plane
 	EnvForwardingPlaneDefault = EnvForwardingPlaneVPP
 	// NSEServiceAccount service account for Network Service Endpoints
@@ -36,6 +38,8 @@ func ForwardingPlane(name string, node *v1.Node, plane string) *v1.Pod {
 		return VPPForwarderPod(name, node)
 	} else if plane == EnvForwardingPlaneKernel {
 		return KernelForwarderPod(name, node)
+	} else if plane == EnvForwardingPlaneOvS {
+		return OvSForwarderPod(name, node)
 	}
 	logrus.Error("Forwarding plane error: Unknown forwarder")
 	return nil
@@ -47,6 +51,8 @@ func ForwardingPlaneWithConfig(name string, node *v1.Node, variables map[string]
 		return VPPForwarderPodConfig(name, node, variables)
 	} else if plane == EnvForwardingPlaneKernel {
 		return KernelForwarderPodConfig(name, node, variables)
+	} else if plane == EnvForwardingPlaneOvS {
+		return OvSForwarderPodConfig(name, node, variables)
 	}
 	logrus.Error("Forwarding plane error: Unknown forwarder")
 	return nil
@@ -58,6 +64,8 @@ func ForwardingPlaneWithLiveCheck(name string, node *v1.Node, plane string) *v1.
 		return VPPForwarderPodLiveCheck(name, node)
 	} else if plane == EnvForwardingPlaneKernel {
 		return KernelForwarderPodLiveCheck(name, node)
+	} else if plane == EnvForwardingPlaneOvS {
+		return OvSForwarderPodLiveCheck(name, node)
 	}
 	logrus.Error("Forwarding plane error: Unknown forwarder")
 	return nil

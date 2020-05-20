@@ -20,6 +20,12 @@ kernel:
   resources:
     limitCPU: 1
     requestsCPU: 1m
+    
+ovs:
+  image: ovs-forwarder
+  resources:
+    limitCPU: 1
+    requestsCPU: 1m
 
 spire:
   enabled: true

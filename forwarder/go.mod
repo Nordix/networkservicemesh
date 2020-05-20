@@ -11,6 +11,7 @@ require (
 	github.com/networkservicemesh/networkservicemesh/sdk v0.3.0
 	github.com/networkservicemesh/networkservicemesh/utils v0.3.0
 	github.com/onsi/gomega v1.7.0
+	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20200430024404-ca79def57fd9
 	github.com/pkg/errors v0.9.1
 	github.com/rs/xid v1.2.1
 	github.com/sirupsen/logrus v1.4.2
@@ -20,6 +21,7 @@ require (
 	golang.zx2c4.com/wireguard v0.0.20200121
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200114203027-fcfc50b29cbb
 	google.golang.org/grpc v1.27.1
+	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 )
 
 replace github.com/census-instrumentation/opencensus-proto v0.1.0-0.20181214143942-ba49f56771b8 => github.com/census-instrumentation/opencensus-proto v0.0.3-0.20181214143942-ba49f56771b8
