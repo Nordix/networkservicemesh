@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"regexp"
 
 	"github.com/sirupsen/logrus"
 
@@ -96,7 +97,14 @@ func (nsmcl *NsmClientList) Destroy(ctx context.Context) error {
 
 // NewNSMClientList creates a new list of clients
 func NewNSMClientList(ctx context.Context, configuration *common.NSConfiguration) (*NsmClientList, error) {
+	var pciDeviceEnv = ""
 	annotationValue := os.Getenv(AnnotationEnv)
+	for _, env := range os.Environ() {
+		if matched, _ := regexp.MatchString("PCIDEVICE.*", env); matched {
+			pciDeviceEnv = env
+			logrus.Infof("PCIDEVICE pool env variable: %s", pciDeviceEnv)
+		}
+	}
 	if annotationValue == "" {
 		client, err := NewNSMClient(ctx, configuration)
 		if err != nil {
