@@ -11,6 +11,7 @@ const (
 	deployment              = "Deployment"
 	pod                     = "Pod"
 	nsmAnnotationKey        = "ns.networkservicemesh.io"
+	dpAnnotationKey         = "dp.networkservicemesh.io"
 	repoEnv                 = "REPO"
 	initContainerEnv        = "INITCONTAINER"
 	namespaceEnv            = "NSM_NAMESPACE"

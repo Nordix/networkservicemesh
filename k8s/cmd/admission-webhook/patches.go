@@ -79,7 +79,7 @@ func createDNSPatch(tuple *podSpecAndMeta, annotationValue string) (patch []patc
 	return patch
 }
 
-func createNsmInitContainerPatch(target []corev1.Container, annotationValue string) []patchOperation {
+func createNsmInitContainerPatch(target []corev1.Container, annotationValue, dpName, dpDevices string) []patchOperation {
 	var patch []patchOperation
 
 	namespace := getNamespace()
@@ -119,15 +119,19 @@ func createNsmInitContainerPatch(target []corev1.Container, annotationValue stri
 			})
 	}
 	var value interface{}
+	initContainerRl := corev1.ResourceList{
+		"networkservicemesh.io/socket": resource.MustParse("1"),
+	}
+	if dpName != "" {
+		initContainerRl[corev1.ResourceName(dpName)] = resource.MustParse(dpDevices)
+	}
 	nsmInitContainer := corev1.Container{
 		Name:            initContainerName,
 		Image:           fmt.Sprintf("%s/%s:%s", getRepo(), getInitContainer(), getTag()),
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Env:             envVals,
 		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				"networkservicemesh.io/socket": resource.MustParse("1"),
-			},
+			Limits: initContainerRl,
 		},
 	}
 	dnsNsmInitContainer := corev1.Container{

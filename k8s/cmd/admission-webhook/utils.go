@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/networkservicemesh/networkservicemesh/k8s/pkg/networkservice/namespace"
 
@@ -81,23 +82,23 @@ func isSupportKind(request *v1beta1.AdmissionRequest) bool {
 	return request.Kind.Kind == pod || request.Kind.Kind == deployment
 }
 
-func getNsmAnnotationValue(ignoredNamespaceList []string, tuple *podSpecAndMeta) (string, bool) {
+func getNsmAnnotationValue(ignoredNamespaceList []string, tuple *podSpecAndMeta) (string, string, bool, bool) {
 	// skip special kubernetes system namespaces
 	for _, namespace := range ignoredNamespaceList {
 		if tuple.meta.Namespace == namespace {
 			logrus.Infof("Skip validation for %v for it's in special namespace:%v", tuple.meta.Name, tuple.meta.Namespace)
-			return "", false
+			return "", "", false, false
 		}
 	}
 
 	annotations := tuple.meta.GetAnnotations()
 	if annotations == nil {
 		logrus.Info("No annotations, skip")
-		return "", false
+		return "", "", false, false
 	}
-
+	dp_value, dp_ok := annotations[dpAnnotationKey]
 	value, ok := annotations[nsmAnnotationKey]
-	return value, ok
+	return value, dp_value, dp_ok, ok
 }
 
 func parseAdmissionReview(body []byte) (*v1beta1.AdmissionReview, error) {
@@ -106,6 +107,20 @@ func parseAdmissionReview(body []byte) (*v1beta1.AdmissionReview, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+func parseDpAnnotationValue(dp_value string) (string, string, error) {
+	dp_list := strings.Split(dp_value, "?")
+	if len(dp_list) != 2 {
+		return "", "", fmt.Errorf("Device pool value format is incorrect %s", dp_value)
+	}
+	dp_name := dp_list[0]
+	device_values := strings.Split(dp_list[1], "=")
+	if len(device_values) != 2 {
+		return "", "", fmt.Errorf("Device pool value format is incorrect %s", dp_value)
+	}
+	device_number := device_values[1]
+	return dp_name, device_number, nil
 }
 
 func readRequest(r *http.Request) ([]byte, error) {
