@@ -21,4 +21,6 @@ const (
 	NsmBaseDirEnv = "NSM_BASE_DIR"
 	// BridgeName integration bridge on which client and endpoint pod can connect with.
 	BridgeName = "br-nsm"
+	// PciAddress - SmartNIc device PCI address
+	PciAddress = "pci_address"
 )

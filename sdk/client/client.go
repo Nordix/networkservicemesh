@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/cls"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
 
 	"github.com/networkservicemesh/networkservicemesh/pkg/tools/spanhelper"
 
@@ -75,7 +76,7 @@ func (nsmc *NsmClient) ConnectRetry(ctx context.Context, name, mechanism, descri
 		// The environment variable will override local call parameters
 		name = nsmc.NscInterfaceName
 	}
-
+	pciAddress := nsmc.NsmConnection.Configuration.PciAddress
 	outgoingMechanism, err := common.NewMechanism(cls.LOCAL, mechanism, name, description)
 
 	span.LogObject("Selected mechanism", outgoingMechanism)
@@ -85,7 +86,9 @@ func (nsmc *NsmClient) ConnectRetry(ctx context.Context, name, mechanism, descri
 		span.LogError(err)
 		return nil, err
 	}
-
+	if pciAddress != "" {
+		outgoingMechanism.Parameters[kernel.PciAddress] = pciAddress
+	}
 	routes := []*connectioncontext.Route{}
 	for _, r := range nsmc.Configuration.Routes {
 		routes = append(routes, &connectioncontext.Route{

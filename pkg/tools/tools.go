@@ -210,6 +210,17 @@ func ParseAnnotationValue(value string) ([]*NSUrl, error) {
 	return result, nil
 }
 
+func ParsePciEnvVariable(env string) []string {
+	var pciAddresses []string
+	if env == "" {
+		return pciAddresses
+	}
+	envValue := strings.Split(env, "=")[1]
+	pciAddresses = strings.Split(envValue, ",")
+	return pciAddresses 
+
+}
+
 // ReadEnvBool reads environment variable and treat it as bool
 func ReadEnvBool(env string, value bool) (bool, error) {
 	str := os.Getenv(env)
