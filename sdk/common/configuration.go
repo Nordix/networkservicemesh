@@ -32,6 +32,7 @@ const (
 	ipAddressEnv              = "IP_ADDRESS"
 	routesEnv                 = "ROUTES"
 	podNameEnv                = "POD_NAME"
+	devicePoolEnv             = "DEVICE_POOL_NAME"
 )
 
 // NSConfiguration contains the full configuration used in the SDK
@@ -49,7 +50,8 @@ type NSConfiguration struct {
 	Routes                 []string
 	PodName                string
 	Namespace              string
-	PciAddress			   string
+	PciAddress             string
+	EndpointPciAddresses   string
 }
 
 // FromEnv creates a new NSConfiguration and fills all unset options from the env variables
@@ -110,6 +112,11 @@ func (configuration *NSConfiguration) FromEnv() *NSConfiguration {
 	if configuration.Namespace == "" {
 		configuration.Namespace = getEnv(namespaceEnv, "Namespace", false)
 	}
+	if configuration.EndpointPciAddresses == "" {
+		if dpName := getEnv(devicePoolEnv, "Device pool name", false); dpName != "" {
+			configuration.EndpointPciAddresses = getEnv(dpName, "PCI addresses", false)
+		}
+	}
 
 	if len(configuration.Routes) == 0 {
 		raw := getEnv(routesEnv, "Routes", false)
@@ -150,7 +157,7 @@ func (configuration *NSConfiguration) GetPciAddress(pciAddresses []string, index
 	if configuration == nil {
 		return nil
 	}
-    if len(pciAddresses) < (index+1) {
+	if len(pciAddresses) < (index + 1) {
 		return configuration
 	}
 	configuration.PciAddress = pciAddresses[index]
