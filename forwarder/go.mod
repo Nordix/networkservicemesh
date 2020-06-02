@@ -3,6 +3,7 @@ module github.com/networkservicemesh/networkservicemesh/forwarder
 go 1.13
 
 require (
+        github.com/Mellanox/sriovnet v0.0.0-20190516174650-73402dc8fcaa
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.3.3
 	github.com/networkservicemesh/networkservicemesh/controlplane/api v0.3.0
@@ -15,7 +16,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/xid v1.2.1
 	github.com/sirupsen/logrus v1.4.2
-	github.com/vishvananda/netlink v1.0.0
+	github.com/vishvananda/netlink v1.1.0
 	github.com/vishvananda/netns v0.0.0-20190625233234-7109fa855b0f
 	go.ligato.io/vpp-agent/v3 v3.1.0
 	golang.zx2c4.com/wireguard v0.0.20200121
