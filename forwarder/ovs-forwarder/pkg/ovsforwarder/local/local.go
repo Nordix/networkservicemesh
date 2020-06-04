@@ -22,8 +22,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/ovsutils"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 )
 
 // Connect - struct with local mechanism interfaces creation and deletion methods
@@ -52,17 +52,17 @@ func (c *Connect) SetupLocalOvSConnection(srcOvsPort, dstOvsPort string) error {
 
 	srcPort, err := GetInterfaceOfPort(srcOvsPort)
 	if err != nil {
-		logrus.Errorf("Failed to get OVS port number for %s interface,"+ 
-					  " error: %v", srcOvsPort, err)
+		logrus.Errorf("Failed to get OVS port number for %s interface,"+
+			" error: %v", srcOvsPort, err)
 		return err
 	}
 	dstPort, err := GetInterfaceOfPort(dstOvsPort)
 	if err != nil {
-		logrus.Errorf("Failed to get OVS port number for %s interface,"+ 
-					  " error: %v", dstOvsPort, err)
+		logrus.Errorf("Failed to get OVS port number for %s interface,"+
+			" error: %v", dstOvsPort, err)
 		return err
 	}
-	
+
 	stdout, stderr, err = util.RunOVSOfctl("add-flow", kernel.BridgeName, fmt.Sprintf("priority=100, in_port=%d,"+
 		" actions=output:%d", srcPort, dstPort))
 	if err != nil {

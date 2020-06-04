@@ -21,9 +21,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/common"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/crossconnect"
 	"github.com/networkservicemesh/networkservicemesh/forwarder/kernel-forwarder/pkg/monitoring"
+	"github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/sriov"
 )
 
 const (
@@ -54,6 +56,62 @@ func (o *OvSForwarder) handleLocalConnection(crossConnect *crossconnect.CrossCon
 	return devices, err
 }
 
+func (o *OvSForwarder) initInterface(deviceID, deviceNetRep string, crossConnect *crossconnect.CrossConnect,
+	isDst bool) (*sriov.VFInterfaceConfiguration, error) {
+	var ovsPortName string
+	var vfInterfaceConfig sriov.VFInterfaceConfiguration
+	var conn *connection.Connection
+	if isDst {
+		conn = crossConnect.GetDestination()
+		ovsPortName = dstPrefix + crossConnect.GetId()
+	} else {
+		conn = crossConnect.GetSource()
+		ovsPortName = srcPrefix + crossConnect.GetId()
+	}
+	if deviceID != "" {
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, deviceNetRep, isDst)
+		if err := sriov.SetupVF(vfInterfaceConfig); err != nil {
+			return nil, err
+		}
+	} else {
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
+		if err := CreateInterfaces(vfInterfaceConfig.Name, ovsPortName); err != nil {
+			return nil, err
+		}
+		SetInterfacesUp(ovsPortName)
+		if _, err := SetupInterface(vfInterfaceConfig.Name, conn, isDst); err != nil {
+			return nil, err
+		}
+	}
+	return &vfInterfaceConfig, nil
+}
+
+func (o *OvSForwarder) releaseInterface(device, ovsPortName string, crossConnect *crossconnect.CrossConnect,
+	isDst bool) *sriov.VFInterfaceConfiguration {
+	var vfInterfaceConfig sriov.VFInterfaceConfiguration
+	var conn *connection.Connection
+	if isDst {
+		conn = crossConnect.GetDestination()
+	} else {
+		conn = crossConnect.GetSource()
+	}
+	if device != "" {
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
+		if err := sriov.ReleaseVF(vfInterfaceConfig); err != nil {
+			logrus.Errorf("local: %v", err)
+		}
+	} else {
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
+		if _, err := ClearInterfaceSetup(vfInterfaceConfig.Name, conn); err != nil {
+			logrus.Errorf("local: %v", err)
+		}
+		if err := DeleteInterface(ovsPortName); err != nil {
+			logrus.Errorf("local: %v", err)
+		}
+	}
+	return &vfInterfaceConfig
+}
+
 // createLocalConnection handles creating a local connection
 func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossConnect) (map[string]monitoring.Device, error) {
 	logrus.Info("local: creating connection...")
@@ -61,39 +119,43 @@ func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossCon
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	srcName := crossConnect.GetSource().GetMechanism().GetParameters()[common.InterfaceNameKey]
-	dstName := crossConnect.GetDestination().GetMechanism().GetParameters()[common.InterfaceNameKey]
-
-	var srcNetNsInode string
-	var dstNetNsInode string
+	var srcDeviceID, srcNetRep string
 	var err error
-
-	srcOvSPortName := srcPrefix + crossConnect.GetId()
-	dstOvSPortName := dstPrefix + crossConnect.GetId()
-
-	if err = CreateInterfaces(srcName, srcOvSPortName); err != nil {
-		logrus.Errorf("local: %v", err)
-		return nil, err
+	if srcDeviceID, ok := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+		if srcNetRep, err = sriov.GetNetRepresentor(srcDeviceID); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = CreateInterfaces(dstName, dstOvSPortName); err != nil {
+	var dstDeviceID, dstNetRep string
+	if dstDeviceID, ok := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+		if dstNetRep, err = sriov.GetNetRepresentor(dstDeviceID); err != nil {
+			return nil, err
+		}
+	}
+
+	interfaceConfig, err := o.initInterface(srcDeviceID, srcNetRep, crossConnect, false)
+	if err != nil {
 		logrus.Errorf("local: %v", err)
 		return nil, err
+
 	}
+	srcName := interfaceConfig.Name
+	srcOvSPortName := interfaceConfig.NetRepDevice
+	srcNetNsInode := interfaceConfig.TargetNetns
+
+	interfaceConfig, err = o.initInterface(dstDeviceID, dstNetRep, crossConnect, true)
+	if err != nil {
+		logrus.Errorf("local: %v", err)
+		return nil, err
+
+	}
+	dstName := interfaceConfig.Name
+	dstOvSPortName := interfaceConfig.NetRepDevice
+	dstNetNsInode := interfaceConfig.TargetNetns
 
 	if err = o.localConnect.SetupLocalOvSConnection(srcOvSPortName, dstOvSPortName); err != nil {
 		logrus.Errorf("local: %v", err)
-		return nil, err
-	}
-
-	SetInterfacesUp(srcOvSPortName, dstOvSPortName)
-
-	if srcNetNsInode, err = SetupInterface(srcName, crossConnect.GetSource(), false); err != nil {
-		return nil, err
-	}
-
-	crossConnect.GetDestination().GetContext().IpContext = crossConnect.GetSource().GetContext().GetIpContext()
-	if dstNetNsInode, err = SetupInterface(dstName, crossConnect.GetDestination(), true); err != nil {
 		return nil, err
 	}
 
@@ -111,29 +173,36 @@ func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossCon
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	srcName := crossConnect.GetSource().GetMechanism().GetParameters()[common.InterfaceNameKey]
-	dstName := crossConnect.GetDestination().GetMechanism().GetParameters()[common.InterfaceNameKey]
+	var srcDeviceID, srcNetRep string
+	if srcDeviceID, ok := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+		srcNetRep, _ = sriov.GetNetRepresentor(srcDeviceID)
+	}
+	var dstDeviceID, dstNetRep string
+	if dstDeviceID, ok := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+		dstNetRep, _ = sriov.GetNetRepresentor(dstDeviceID)
+	}
 
-	srcOvSPortName := srcPrefix + crossConnect.GetId()
-	dstOvSPortName := dstPrefix + crossConnect.GetId()
+	var srcOvSPortName, dstOvSPortName string
+	if srcDeviceID != "" {
+		srcOvSPortName = srcNetRep
+	} else {
+		srcOvSPortName = srcPrefix + crossConnect.GetId()
+	}
+	if dstDeviceID != "" {
+		dstOvSPortName = dstNetRep
+	} else {
+		dstOvSPortName = dstPrefix + crossConnect.GetId()
+	}
 
 	o.localConnect.DeleteLocalOvSConnection(srcOvSPortName, dstOvSPortName)
 
-	srcNetNsInode, srcErr := ClearInterfaceSetup(srcName, crossConnect.GetSource())
-	dstNetNsInode, dstErr := ClearInterfaceSetup(dstName, crossConnect.GetDestination())
+	interfaceConfig := o.releaseInterface(srcDeviceID, srcOvSPortName, crossConnect, false)
+	srcName := interfaceConfig.Name
+	srcNetNsInode := interfaceConfig.TargetNetns
 
-	if srcErr != nil || dstErr != nil {
-		logrus.Errorf("local: %v - %v", srcErr, dstErr)
-	}
-
-	// somehow ovs ports are visible in host net ns even after deleting srcName and dstName.
-	// hence deleting it using ovs port names.
-	srcErr = DeleteInterface(srcOvSPortName)
-	dstErr = DeleteInterface(dstOvSPortName)
-
-	if srcErr != nil || dstErr != nil {
-		logrus.Errorf("local: %v - %v", srcErr, dstErr)
-	}
+	interfaceConfig = o.releaseInterface(dstDeviceID, dstOvSPortName, crossConnect, true)
+	dstName := interfaceConfig.Name
+	dstNetNsInode := interfaceConfig.TargetNetns
 
 	logrus.Infof("local: deletion completed for devices - source: %s, destination: %s", srcName, dstName)
 	srcDevice := monitoring.Device{Name: srcName, XconName: "SRC-" + crossConnect.GetId()}

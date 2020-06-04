@@ -3,7 +3,7 @@ module github.com/networkservicemesh/networkservicemesh/forwarder
 go 1.13
 
 require (
-        github.com/Mellanox/sriovnet v0.0.0-20190516174650-73402dc8fcaa
+	github.com/Mellanox/sriovnet v0.0.0-20190516174650-73402dc8fcaa
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.3.3
 	github.com/networkservicemesh/networkservicemesh/controlplane/api v0.3.0

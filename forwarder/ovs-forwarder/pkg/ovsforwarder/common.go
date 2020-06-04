@@ -26,7 +26,9 @@ import (
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/common"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connectioncontext"
+	"github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/sriov"
 	"github.com/networkservicemesh/networkservicemesh/utils/fs"
 )
 
@@ -289,4 +291,27 @@ func DeleteInterface(ifaceName string) error {
 		return errors.Errorf("local: failed to delete the VETH pair - %v", err)
 	}
 	return nil
+}
+
+// GetLocalConnectionConfig returns VF Interface configuration
+func GetLocalConnectionConfig(c *connection.Connection, ovsPortName string, isDst bool) sriov.VFInterfaceConfiguration {
+	name, ok := c.GetMechanism().GetParameters()[common.InterfaceNameKey]
+	if !ok {
+		name = c.GetMechanism().GetParameters()[common.Workspace]
+	}
+
+	var ipAddress string
+	if isDst {
+		ipAddress = c.GetContext().GetIpContext().GetDstIpAddr()
+	} else {
+		ipAddress = c.GetContext().GetIpContext().GetSrcIpAddr()
+	}
+
+	return sriov.VFInterfaceConfiguration{
+		PciAddress:   c.GetMechanism().GetParameters()[kernel.PciAddress],
+		TargetNetns:  c.GetMechanism().GetParameters()[common.NetNsInodeKey],
+		Name:         name,
+		NetRepDevice: ovsPortName,
+		IPAddress:    ipAddress,
+	}
 }

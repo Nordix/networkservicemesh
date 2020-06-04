@@ -13,11 +13,12 @@ import (
 // VFInterfaceConfiguration represents configuration details that
 // will be used to setup or close cross connection
 type VFInterfaceConfiguration struct {
-	pciAddress  string
-	name        string
-	ipAddress   string
-	macAddress  string
-	targetNetns string
+	PciAddress   string
+	Name         string
+	NetRepDevice string
+	IPAddress    string
+	MacAddress   string
+	TargetNetns  string
 }
 
 // GetNetRepresentor retrieves network representor device for smartvf
@@ -75,14 +76,14 @@ func SetupVF(config VFInterfaceConfiguration) error {
 	}()
 
 	// get network namespace handle
-	targetNetns, err := fs.GetNsHandleFromInode(config.targetNetns)
+	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup VF")
 	}
 	defer targetNetns.Close()
 
 	// get VF link representor
-	link, err := GetLink(config.pciAddress, config.name, hostNetns, targetNetns)
+	link, err := GetLink(config.PciAddress, config.Name, hostNetns, targetNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup VF")
 	}
@@ -100,13 +101,13 @@ func SetupVF(config VFInterfaceConfiguration) error {
 	}
 
 	// add IP address
-	err = link.AddAddress(config.ipAddress)
+	err = link.AddAddress(config.IPAddress)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup VF")
 	}
 
 	// set new interface name
-	err = link.SetName(config.name)
+	err = link.SetName(config.Name)
 	if err != nil {
 		return err
 	}
@@ -139,14 +140,14 @@ func ReleaseVF(config VFInterfaceConfiguration) error {
 	}()
 
 	// get network namespace handle
-	targetNetns, err := fs.GetNsHandleFromInode(config.targetNetns)
+	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to release VF")
 	}
 	defer targetNetns.Close()
 
 	// get VF link representor
-	link, err := GetLink(config.pciAddress, config.name, targetNetns)
+	link, err := GetLink(config.PciAddress, config.Name, targetNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to release VF")
 	}
@@ -158,7 +159,7 @@ func ReleaseVF(config VFInterfaceConfiguration) error {
 	}
 
 	// delete IP address
-	err = link.DeleteAddress(config.ipAddress)
+	err = link.DeleteAddress(config.IPAddress)
 	if err != nil {
 		return errors.Wrapf(err, "failed to release VF")
 	}
