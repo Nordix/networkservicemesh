@@ -11,7 +11,7 @@ require (
 	github.com/networkservicemesh/networkservicemesh/pkg v0.3.0
 	github.com/networkservicemesh/networkservicemesh/sdk v0.3.0
 	github.com/networkservicemesh/networkservicemesh/utils v0.3.0
-	github.com/onsi/gomega v1.7.0
+	github.com/onsi/gomega v1.8.1
 	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20200430024404-ca79def57fd9
 	github.com/pkg/errors v0.9.1
 	github.com/rs/xid v1.2.1
