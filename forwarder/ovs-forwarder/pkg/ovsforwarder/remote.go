@@ -125,7 +125,7 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	//	logrus.Errorf("remote: %v", err)
 	//	return nil, err
 	//}
-	if err = setupLocalInterface(interfaceConfig, direction == INCOMING); err != nil {
+	if err = o.setupLocalInterface(interfaceConfig, localConnection, direction == INCOMING); err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
 	}
@@ -205,14 +205,15 @@ func (o *OvSForwarder) initLocalInterface(deviceID, deviceNetRep, connID string,
 	return &vfInterfaceConfig, nil
 }
 
-func (o *OvSForwarder) setupLocalInterface(vfInterfaceConfig *sriov.VFInterfaceConfiguration, direction bool) error {
+func (o *OvSForwarder) setupLocalInterface(vfInterfaceConfig *sriov.VFInterfaceConfiguration,
+        localConnection*connection.Connection, direction bool) error {
 	if vfInterfaceConfig.PciAddress != "" {
-		if err := sriov.SetupVF(vfInterfaceConfig); err != nil {
+		if err := sriov.SetupVF(*vfInterfaceConfig); err != nil {
 			return err
 		}
 	} else {
 		SetInterfacesUp(vfInterfaceConfig.NetRepDevice)
-		if _, err := SetupInterface(vfInterfaceConfig.Name, conn, direction); err != nil {
+		if _, err := SetupInterface(vfInterfaceConfig.Name, localConnection, direction); err != nil {
 			return err
 		}
 	}
