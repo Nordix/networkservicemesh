@@ -23,10 +23,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
-	common2 "github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/common"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/crossconnect"
 	"github.com/networkservicemesh/networkservicemesh/forwarder/kernel-forwarder/pkg/monitoring"
 	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/remote"
+	"github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/sriov"
 )
 
 // handleRemoteConnection handles remote connect/disconnect requests for either incoming or outgoing connections
@@ -77,7 +78,7 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	} else {
 		xconName = "SRC-" + connID
 	}
-	ifaceName := localConnection.GetMechanism().GetParameters()[common2.InterfaceNameKey]
+	//ifaceName := localConnection.GetMechanism().GetParameters()[common2.InterfaceNameKey]
 	var nsInode string
 	var err error
 
@@ -85,25 +86,46 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	ovsPortName := "tap_" + connID
-	if err = CreateInterfaces(ifaceName, ovsPortName); err != nil {
-		logrus.Errorf("remote: %v", err)
+	//ovsPortName := "tap_" + connID
+	var deviceID, netRep string
+	if deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+		if netRep, err = sriov.GetNetRepresentor(deviceID); err != nil {
+			return nil, err
+		}
+	}
+
+	interfaceConfig, err := o.initLocalInterface(deviceID, netRep, connID, localConnection, direction == INCOMING)
+	if err != nil {
+		logrus.Errorf("local: %v", err)
 		return nil, err
 	}
+
+	//if err = CreateInterfaces(ifaceName, ovsPortName); err != nil {
+	//logrus.Errorf("remote: %v", err)
+	//return nil, err
+	//}
 
 	vni, ovsTunnelName, err := o.remoteConnect.CreateTunnelInterface(remoteConnection, direction)
-	if  err != nil {
+	if err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
 	}
 
-	if err = o.remoteConnect.SetupOvSConnection(ovsPortName, ovsTunnelName, vni); err !=nil {
+	ovsPortName := interfaceConfig.NetRepDevice
+	ifaceName := interfaceConfig.Name
+	nsInode = interfaceConfig.TargetNetns
+
+	if err = o.remoteConnect.SetupOvSConnection(ovsPortName, ovsTunnelName, vni); err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
 	}
 
-	SetInterfacesUp(ovsPortName)
-	if nsInode, err = SetupInterface(ifaceName, localConnection, direction == INCOMING); err != nil {
+	// SetInterfacesUp(ovsPortName)
+	//if nsInode, err = SetupInterface(ifaceName, localConnection, direction == INCOMING); err != nil {
+	//	logrus.Errorf("remote: %v", err)
+	//	return nil, err
+	//}
+	if err = setupLocalInterface(interfaceConfig, direction == INCOMING); err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
 	}
@@ -116,7 +138,7 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, remoteConnection *connection.Connection, direction uint8) (map[string]monitoring.Device, error) {
 	logrus.Info("remote: deleting connection...")
 
-	ifaceName := localConnection.GetMechanism().GetParameters()[common2.InterfaceNameKey]
+	//ifaceName := localConnection.GetMechanism().GetParameters()[common2.InterfaceNameKey]
 	var xconName string
 	if direction == INCOMING {
 		xconName = "DST-" + connID
@@ -128,20 +150,36 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	ovsPortName := "tap_" + connID
-	vni, ovsTunnelName , err := o.remoteConnect.GetTunnelParameters(remoteConnection, direction)
-	if  err != nil {
+	//ovsPortName := "tap_" + connID
+	vni, ovsTunnelName, err := o.remoteConnect.GetTunnelParameters(remoteConnection, direction)
+	if err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
 	}
+
+	var deviceID, netRep string
+	if deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+		netRep, _ = sriov.GetNetRepresentor(deviceID)
+	}
+
+	var ovsPortName string
+	if deviceID != "" {
+		ovsPortName = netRep
+	} else {
+		ovsPortName = "tap_" + connID
+	}
 	o.remoteConnect.DeleteLocalOvSConnection(ovsPortName, ovsTunnelName, vni)
 
-	nsInode, localErr := ClearInterfaceSetup(ifaceName, localConnection)
-	remoteErr := DeleteInterface(ifaceName)
-	
-	if localErr != nil || remoteErr != nil {
-		logrus.Errorf("remote: %v - %v", localErr, remoteErr)
-	}
+	//nsInode, localErr := ClearInterfaceSetup(ifaceName, localConnection)
+	//remoteErr := DeleteInterface(ifaceName)
+
+	interfaceConfig := o.releaseLocalInterface(deviceID, ovsPortName, localConnection, direction == INCOMING)
+	ifaceName := interfaceConfig.Name
+	nsInode := interfaceConfig.TargetNetns
+
+	//if localErr != nil || remoteErr != nil {
+	//	logrus.Errorf("remote: %v - %v", localErr, remoteErr)
+	//}
 
 	if err := o.remoteConnect.DeleteTunnelInterface(ovsTunnelName, remoteConnection); err != nil {
 		logrus.Errorf("remote: %v", err)
@@ -149,4 +187,56 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 
 	logrus.Infof("remote: deletion completed for device - %s", ifaceName)
 	return map[string]monitoring.Device{nsInode: {Name: ifaceName, XconName: xconName}}, nil
+}
+
+func (o *OvSForwarder) initLocalInterface(deviceID, deviceNetRep, connID string, localConnection *connection.Connection, direction bool) (*sriov.VFInterfaceConfiguration, error) {
+
+	var vfInterfaceConfig sriov.VFInterfaceConfiguration
+	ovsPortName := "tap_" + connID
+	if deviceID != "" {
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, deviceNetRep, direction)
+	} else {
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, ovsPortName, direction)
+		if err := CreateInterfaces(vfInterfaceConfig.Name, ovsPortName); err != nil {
+			return nil, err
+		}
+
+	}
+	return &vfInterfaceConfig, nil
+}
+
+func (o *OvSForwarder) setupLocalInterface(vfInterfaceConfig *sriov.VFInterfaceConfiguration, direction bool) error {
+	if vfInterfaceConfig.PciAddress != "" {
+		if err := sriov.SetupVF(vfInterfaceConfig); err != nil {
+			return err
+		}
+	} else {
+		SetInterfacesUp(vfInterfaceConfig.NetRepDevice)
+		if _, err := SetupInterface(vfInterfaceConfig.Name, conn, direction); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (o *OvSForwarder) releaseLocalInterface(device, ovsPortName string, localConnection *connection.Connection,
+	direction bool) *sriov.VFInterfaceConfiguration {
+	var vfInterfaceConfig sriov.VFInterfaceConfiguration
+
+	if device != "" {
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, ovsPortName, direction)
+		if err := sriov.ReleaseVF(vfInterfaceConfig); err != nil {
+			logrus.Errorf("remote: %v", err)
+		}
+	} else {
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, ovsPortName, direction)
+		if _, err := ClearInterfaceSetup(vfInterfaceConfig.Name, localConnection); err != nil {
+			logrus.Errorf("remote: %v", err)
+		}
+		if err := DeleteInterface(vfInterfaceConfig.Name); err != nil {
+			logrus.Errorf("local: %v", err)
+		}
+	}
+	return &vfInterfaceConfig
 }
