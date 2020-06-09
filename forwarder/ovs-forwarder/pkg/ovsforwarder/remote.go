@@ -78,7 +78,6 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	} else {
 		xconName = "SRC-" + connID
 	}
-	//ifaceName := localConnection.GetMechanism().GetParameters()[common2.InterfaceNameKey]
 	var nsInode string
 	var err error
 
@@ -86,7 +85,6 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	//ovsPortName := "tap_" + connID
 	var deviceID, netRep string
 	if deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]; ok {
 		if netRep, err = sriov.GetNetRepresentor(deviceID); err != nil {
@@ -99,11 +97,6 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 		logrus.Errorf("local: %v", err)
 		return nil, err
 	}
-
-	//if err = CreateInterfaces(ifaceName, ovsPortName); err != nil {
-	//logrus.Errorf("remote: %v", err)
-	//return nil, err
-	//}
 
 	vni, ovsTunnelName, err := o.remoteConnect.CreateTunnelInterface(remoteConnection, direction)
 	if err != nil {
@@ -120,11 +113,6 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 		return nil, err
 	}
 
-	// SetInterfacesUp(ovsPortName)
-	//if nsInode, err = SetupInterface(ifaceName, localConnection, direction == INCOMING); err != nil {
-	//	logrus.Errorf("remote: %v", err)
-	//	return nil, err
-	//}
 	if err = o.setupLocalInterface(interfaceConfig, localConnection, direction == INCOMING); err != nil {
 		logrus.Errorf("remote: %v", err)
 		return nil, err
@@ -138,7 +126,6 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, remoteConnection *connection.Connection, direction uint8) (map[string]monitoring.Device, error) {
 	logrus.Info("remote: deleting connection...")
 
-	//ifaceName := localConnection.GetMechanism().GetParameters()[common2.InterfaceNameKey]
 	var xconName string
 	if direction == INCOMING {
 		xconName = "DST-" + connID
@@ -150,7 +137,6 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	//ovsPortName := "tap_" + connID
 	vni, ovsTunnelName, err := o.remoteConnect.GetTunnelParameters(remoteConnection, direction)
 	if err != nil {
 		logrus.Errorf("remote: %v", err)
@@ -170,16 +156,9 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	}
 	o.remoteConnect.DeleteLocalOvSConnection(ovsPortName, ovsTunnelName, vni)
 
-	//nsInode, localErr := ClearInterfaceSetup(ifaceName, localConnection)
-	//remoteErr := DeleteInterface(ifaceName)
-
 	interfaceConfig := o.releaseLocalInterface(deviceID, ovsPortName, localConnection, direction == INCOMING)
 	ifaceName := interfaceConfig.Name
 	nsInode := interfaceConfig.TargetNetns
-
-	//if localErr != nil || remoteErr != nil {
-	//	logrus.Errorf("remote: %v - %v", localErr, remoteErr)
-	//}
 
 	if err := o.remoteConnect.DeleteTunnelInterface(ovsTunnelName, remoteConnection); err != nil {
 		logrus.Errorf("remote: %v", err)
@@ -189,6 +168,7 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	return map[string]monitoring.Device{nsInode: {Name: ifaceName, XconName: xconName}}, nil
 }
 
+// Create local interfaces for smartNIC or Kernel case
 func (o *OvSForwarder) initLocalInterface(deviceID, deviceNetRep, connID string, localConnection *connection.Connection, direction bool) (*sriov.VFInterfaceConfiguration, error) {
 
 	var vfInterfaceConfig sriov.VFInterfaceConfiguration
@@ -205,8 +185,9 @@ func (o *OvSForwarder) initLocalInterface(deviceID, deviceNetRep, connID string,
 	return &vfInterfaceConfig, nil
 }
 
+// Configure and attach local interfaces for smartNIC and Kernel case
 func (o *OvSForwarder) setupLocalInterface(vfInterfaceConfig *sriov.VFInterfaceConfiguration,
-        localConnection*connection.Connection, direction bool) error {
+	localConnection *connection.Connection, direction bool) error {
 	if vfInterfaceConfig.PciAddress != "" {
 		if err := sriov.SetupVF(*vfInterfaceConfig); err != nil {
 			return err
@@ -221,6 +202,7 @@ func (o *OvSForwarder) setupLocalInterface(vfInterfaceConfig *sriov.VFInterfaceC
 	return nil
 }
 
+// Release local interfaces for SmartNIC and Kernel case
 func (o *OvSForwarder) releaseLocalInterface(device, ovsPortName string, localConnection *connection.Connection,
 	direction bool) *sriov.VFInterfaceConfiguration {
 	var vfInterfaceConfig sriov.VFInterfaceConfiguration
