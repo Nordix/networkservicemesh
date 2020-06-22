@@ -58,9 +58,10 @@ func (cce *ConnectionEndpoint) Request(ctx context.Context, request *networkserv
 		return nil, err
 	}
 	for pciAddress, in_use := range cce.pciAddresses {
-		if in_use == false {
+		if !in_use {
 			mechanism.Parameters[kernel.PciAddress] = pciAddress
 			pickedPciAddress = pciAddress
+			break
 		}
 	}
 

@@ -86,7 +86,8 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	defer runtime.UnlockOSThread()
 
 	var deviceID, netRep string
-	if deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+	deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]
+	if ok {
 		if netRep, err = sriov.GetNetRepresentor(deviceID); err != nil {
 			return nil, err
 		}
@@ -144,7 +145,8 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	}
 
 	var deviceID, netRep string
-	if deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+	deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]
+	if ok {
 		netRep, _ = sriov.GetNetRepresentor(deviceID)
 	}
 
