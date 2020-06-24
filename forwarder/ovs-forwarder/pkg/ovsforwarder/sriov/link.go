@@ -29,6 +29,7 @@ type Link interface {
 	MoveToNetns(target netns.NsHandle) error
 	SetAdminState(state LinkStatus) error
 	SetName(name string) error
+	GetName() (string, error)
 }
 
 // vfLink is Link interface implementation for SR-IOV VF interfaces
@@ -161,6 +162,14 @@ func (vf *vfLink) SetName(name string) error {
 	}
 
 	return nil
+}
+
+func (vf *vfLink) GetName() (string, error) {
+	vfLinkName := vf.link.Attrs().Name
+	if len(vfLinkName) != 0 {
+		return vfLinkName, nil
+	}
+	return "", errors.Errorf("VF Link name is empty")
 }
 
 func searchByPCIAddress(ns netns.NsHandle, name, pciAddress string) (netlink.Link, error) {

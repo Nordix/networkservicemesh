@@ -119,16 +119,16 @@ func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossCon
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	var srcDeviceID, srcNetRep string
+	var srcNetRep, dstNetRep string
 	var err error
-	if srcDeviceID, ok := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+	srcDeviceID, isPresent := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]
+	if isPresent {
 		if srcNetRep, err = sriov.GetNetRepresentor(srcDeviceID); err != nil {
 			return nil, err
 		}
 	}
-
-	var dstDeviceID, dstNetRep string
-	if dstDeviceID, ok := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+	dstDeviceID, isPresent := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]
+	if isPresent {
 		if dstNetRep, err = sriov.GetNetRepresentor(dstDeviceID); err != nil {
 			return nil, err
 		}
@@ -173,12 +173,13 @@ func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossCon
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	var srcDeviceID, srcNetRep string
-	if srcDeviceID, ok := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+	var srcNetRep, dstNetRep string
+	srcDeviceID, isPresent := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]
+	if isPresent {
 		srcNetRep, _ = sriov.GetNetRepresentor(srcDeviceID)
 	}
-	var dstDeviceID, dstNetRep string
-	if dstDeviceID, ok := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]; ok {
+	dstDeviceID, isPresent := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]
+	if isPresent {
 		dstNetRep, _ = sriov.GetNetRepresentor(dstDeviceID)
 	}
 

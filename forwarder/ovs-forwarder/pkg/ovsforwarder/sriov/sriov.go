@@ -2,6 +2,7 @@ package sriov
 
 import (
 	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netns"
@@ -20,6 +21,12 @@ type VFInterfaceConfiguration struct {
 	MacAddress   string
 	TargetNetns  string
 }
+
+// VfNameMap contains the mapping between pci address and its net
+// device name. This is useful to reset the device name back original
+// name when device is moved from container network namespace into host
+// net namespace.
+var VfNameMap = make(map[string]string)
 
 // GetNetRepresentor retrieves network representor device for smartvf
 func GetNetRepresentor(deviceID string) (string, error) {
@@ -88,6 +95,12 @@ func SetupVF(config VFInterfaceConfiguration) error {
 		return errors.Wrap(err, "failed to setup VF")
 	}
 
+	origName, err := link.GetName()
+	if err != nil {
+		return errors.Wrap(err, "failed to setup VF")
+	}
+	VfNameMap[config.PciAddress] = origName
+
 	// move link into pod's network namespace
 	err = link.MoveToNetns(targetNetns)
 	if err != nil {
@@ -118,8 +131,6 @@ func SetupVF(config VFInterfaceConfiguration) error {
 		return err
 	}
 
-	// TODO: set MAC address, routes, neighbours, vlan and other properties etc.
-
 	return nil
 }
 
@@ -140,6 +151,8 @@ func ReleaseVF(config VFInterfaceConfiguration) error {
 	}()
 
 	// get network namespace handle
+	// FIXME: It fails to retrieve the targetNetns, is container deleted already ?!
+	// Ex: err - "failed to find file in /proc/*/ns/net with inode 4026534827: not found"
 	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to release VF")
@@ -164,6 +177,15 @@ func ReleaseVF(config VFInterfaceConfiguration) error {
 		return errors.Wrapf(err, "failed to release VF")
 	}
 
+	if origName, found := VfNameMap[config.PciAddress]; found {
+		delete(VfNameMap, config.PciAddress)
+		// set to original interface name
+		err = link.SetName(origName)
+		if err != nil {
+			return errors.Wrap(err, "failed to release VF")
+		}
+	}
+
 	err = link.MoveToNetns(hostNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to release VF")
@@ -174,8 +196,6 @@ func ReleaseVF(config VFInterfaceConfiguration) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to release VF")
 	}
-
-	// TODO(optional): restore original link name
 
 	return nil
 }
