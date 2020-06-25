@@ -97,7 +97,7 @@ func (o *OvSForwarder) releaseInterface(device, ovsPortName string, crossConnect
 	}
 	if device != "" {
 		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
-		if err := sriov.ReleaseVF(vfInterfaceConfig); err != nil {
+		if err := sriov.ResetVF(vfInterfaceConfig); err != nil {
 			logrus.Errorf("local: %v", err)
 		}
 	} else {

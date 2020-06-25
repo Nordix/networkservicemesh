@@ -134,47 +134,20 @@ func SetupVF(config VFInterfaceConfiguration) error {
 	return nil
 }
 
-// ReleaseVF releases the VF from target container network namespace into host network namespace
-func ReleaseVF(config VFInterfaceConfiguration) error {
-	// host network namespace to switch back to after finishing link setup
+// ResetVF reset the VF on the host network namespace which was already moved
+// upon deletion of the endpoint and client pod containers.
+func ResetVF(config VFInterfaceConfiguration) error {
+	// get the host network namespace
 	hostNetns, err := netns.Get()
 	if err != nil {
 		return errors.Errorf("failed to get host namespace: %v", err)
 	}
 	defer hostNetns.Close()
 
-	// always switch back to the host namespace at the end of link setup
-	defer func() {
-		if err = netns.Set(hostNetns); err != nil {
-			logrus.Errorf("failed to switch back to host namespace: %v", err)
-		}
-	}()
-
-	// get network namespace handle
-	// FIXME: It fails to retrieve the targetNetns, is container deleted already ?!
-	// Ex: err - "failed to find file in /proc/*/ns/net with inode 4026534827: not found"
-	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
-	if err != nil {
-		return errors.Wrap(err, "failed to release VF")
-	}
-	defer targetNetns.Close()
-
 	// get VF link representor
-	link, err := GetLink(config.PciAddress, config.Name, targetNetns)
+	link, err := GetLink(config.PciAddress, config.Name, hostNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to release VF")
-	}
-
-	// switch to pod's network namespace to apply configuration, link is already there
-	err = netns.Set(targetNetns)
-	if err != nil {
-		return errors.Wrap(err, "failed to release VF")
-	}
-
-	// delete IP address
-	err = link.DeleteAddress(config.IPAddress)
-	if err != nil {
-		return errors.Wrapf(err, "failed to release VF")
 	}
 
 	if origName, found := VfNameMap[config.PciAddress]; found {
@@ -184,17 +157,6 @@ func ReleaseVF(config VFInterfaceConfiguration) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to release VF")
 		}
-	}
-
-	err = link.MoveToNetns(hostNetns)
-	if err != nil {
-		return errors.Wrap(err, "failed to release VF")
-	}
-
-	// switch to host namespace
-	err = netns.Set(hostNetns)
-	if err != nil {
-		return errors.Wrap(err, "failed to release VF")
 	}
 
 	return nil
