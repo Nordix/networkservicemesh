@@ -173,14 +173,21 @@ func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossCon
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
+	var err error
 	var srcNetRep, dstNetRep string
 	srcDeviceID, isPresent := crossConnect.GetSource().GetMechanism().GetParameters()[kernel.PciAddress]
 	if isPresent {
-		srcNetRep, _ = sriov.GetNetRepresentor(srcDeviceID)
+		srcNetRep, err = sriov.GetNetRepresentorWithRetries(srcDeviceID, 5)
+		if err != nil {
+			logrus.Errorf("local: error occured while retrieving srcNetRep for %s, error %v", srcDeviceID, err)
+		}
 	}
 	dstDeviceID, isPresent := crossConnect.GetDestination().GetMechanism().GetParameters()[kernel.PciAddress]
 	if isPresent {
-		dstNetRep, _ = sriov.GetNetRepresentor(dstDeviceID)
+		dstNetRep, err = sriov.GetNetRepresentorWithRetries(dstDeviceID, 5)
+		if err != nil {
+			logrus.Errorf("local: error occured while retrieving dstNetRep for %s, error %v", dstDeviceID, err)
+		}
 	}
 
 	var srcOvSPortName, dstOvSPortName string

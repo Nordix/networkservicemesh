@@ -2,6 +2,7 @@ package sriov
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -30,15 +31,34 @@ var VfNameMap = make(map[string]string)
 
 // GetNetRepresentor retrieves network representor device for smartvf
 func GetNetRepresentor(deviceID string) (string, error) {
-	// get smart VF netdevice from PCI
-	vfNetdevices, err := sriovnet.GetNetDevicesFromPci(deviceID)
-	if err != nil {
-		return "", err
-	}
+	return GetNetRepresentorWithRetries(deviceID, 1)
+}
 
-	// Make sure we have 1 netdevice per pci address
-	if len(vfNetdevices) != 1 {
-		return "", fmt.Errorf("failed to get one netdevice interface per %s", deviceID)
+// GetNetRepresentorWithRetries retrieves network representor device for smartvf
+// Retries are needed when client/endpoint containers are deleted, vfNetdevices
+// returns as empty due to vf device net directory is neither in host net namespace
+// nor in container net namespace.
+func GetNetRepresentorWithRetries(deviceID string, maxRetries int) (string, error) {
+	if maxRetries == 0 {
+		return "", errors.Errorf("maxRetries can not be zero")
+	}
+	// get smart VF netdevice from PCI
+	done := false
+	for maxRetries > 0 && !done {
+		vfNetdevices, err := sriovnet.GetNetDevicesFromPci(deviceID)
+		if err != nil {
+			return "", err
+		}
+		maxRetries = maxRetries - 1
+		// Make sure we have 1 netdevice per pci address
+		if len(vfNetdevices) != 1 && maxRetries == 0 {
+			return "", fmt.Errorf("failed to get one netdevice interface per %s", deviceID)
+		} else if len(vfNetdevices) != 1 {
+			// Retry after 2 seconds
+			time.Sleep(2 * time.Second)
+		} else {
+			done = true
+		}
 	}
 	// get Uplink netdevice.  The uplink is basically the PF name of the deviceID (smart VF).
 	// The uplink is later used to retrieve the representor for the smart VF.

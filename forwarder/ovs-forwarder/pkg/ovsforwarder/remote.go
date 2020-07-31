@@ -147,7 +147,10 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	var deviceID, netRep string
 	deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]
 	if ok {
-		netRep, _ = sriov.GetNetRepresentor(deviceID)
+		netRep, err = sriov.GetNetRepresentorWithRetries(deviceID, 5)
+		if err != nil {
+			logrus.Errorf("remote: error occured while retrieving netRep for %s, error %v", deviceID, err)
+		}
 	}
 
 	var ovsPortName string
