@@ -6,16 +6,8 @@ RUN apk --update add supervisor \
                      bash \
                      net-tools
 
-# ////////////// Open vSwitch Section ////////////// #
-
-# Create database and pid file directory
-RUN /usr/bin/ovsdb-tool create /etc/openvswitch/conf.db
-RUN mkdir -pv /var/run/openvswitch/
-
 # Add supervisord and ovs configuration files
 ADD supervisord.conf /etc/supervisord.conf
-ADD configure-ovs.sh /usr/share/openvswitch/
-RUN chmod 755 /usr/share/openvswitch/configure-ovs.sh
 
 # copy ovs-forwarder binary into bin directory
 ADD ovs-forwarder /bin/ovs-forwarder

@@ -42,6 +42,9 @@ spec:
             - name: spire-agent-socket
               mountPath: /run/spire/sockets
               readOnly: true
+            - name: ovs-socket
+              mountPath: /var/run/openvswitch
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /liveness
@@ -72,6 +75,10 @@ spec:
             path: /run/spire/sockets
             type: DirectoryOrCreate
           name: spire-agent-socket
+        - hostPath:
+            path: /var/run/openvswitch
+            type: DirectoryOrCreate
+          name: ovs-socket
 metadata:
   name: nsm-{{ $fp }}-forwarder
   namespace: {{ .Release.Namespace }}
