@@ -210,13 +210,13 @@ func ParseAnnotationValue(value string) ([]*NSUrl, error) {
 	return result, nil
 }
 
-func ParsePciEnvVariable(env string) []string {
-	var pciAddresses []string
+func ParsePciEnvVariable(env string) string {
+	var pciAddresses string
 	if env == "" {
 		return pciAddresses
 	}
 	envValue := strings.Split(env, "=")[1]
-	pciAddresses = strings.Split(envValue, ",")
+	pciAddresses = envValue
 	return pciAddresses 
 
 }
