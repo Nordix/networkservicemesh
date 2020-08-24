@@ -38,14 +38,13 @@ type ConnectionEndpoint struct {
 	mechanismType string
 	// TODO - id doesn't seem to be used, and should be
 	id           *shortid.Shortid
-	pciAddresses map[string]bool
+	pciAddresses string
 }
 
 // Request implements the request handler
 // Consumes from ctx context.Context:
 //	   Next
 func (cce *ConnectionEndpoint) Request(ctx context.Context, request *networkservice.NetworkServiceRequest) (*connection.Connection, error) {
-	var pickedPciAddress string
 	err := request.IsValid()
 	if err != nil {
 		Log(ctx).Errorf("Request is not valid: %v", err)
@@ -57,17 +56,9 @@ func (cce *ConnectionEndpoint) Request(ctx context.Context, request *networkserv
 		Log(ctx).Errorf("Mechanism not created: %v", err)
 		return nil, err
 	}
-	for pciAddress, in_use := range cce.pciAddresses {
-		if !in_use {
-			mechanism.Parameters[kernel.PciAddress] = pciAddress
-			pickedPciAddress = pciAddress
-			break
-		}
-	}
-
-	if pickedPciAddress != "" {
-		cce.pciAddresses[pickedPciAddress] = true
-	}
+    if cce.pciAddresses != "" {
+	    mechanism.Parameters[kernel.PciAddresses] = cce.pciAddresses
+    }
 
 	request.GetConnection().Mechanism = mechanism
 
@@ -81,10 +72,7 @@ func (cce *ConnectionEndpoint) Request(ctx context.Context, request *networkserv
 // Consumes from ctx context.Context:
 //	   Next
 func (cce *ConnectionEndpoint) Close(ctx context.Context, connection *connection.Connection) (*empty.Empty, error) {
-	pciAddress, ok := connection.GetMechanism().GetParameters()[kernel.PciAddress]
-	if ok {
-		cce.pciAddresses[pciAddress] = false
-	}
+
 	if Next(ctx) != nil {
 		return Next(ctx).Close(ctx, connection)
 	}
@@ -106,7 +94,6 @@ func (cce *ConnectionEndpoint) generateIfName() string {
 
 // NewConnectionEndpoint creates a ConnectionEndpoint
 func NewConnectionEndpoint(configuration *common.NSConfiguration) *ConnectionEndpoint {
-	var endpointPciAddresses = make(map[string]bool)
 	// ensure the env variables are processed
 	if configuration == nil {
 		configuration = &common.NSConfiguration{}
@@ -114,16 +101,10 @@ func NewConnectionEndpoint(configuration *common.NSConfiguration) *ConnectionEnd
 
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	if configuration.EndpointPciAddresses != "" {
-		for _, pciAddress := range strings.Split(configuration.EndpointPciAddresses, ",") {
-			endpointPciAddresses[pciAddress] = false
-		}
-	}
-
 	self := &ConnectionEndpoint{
 		mechanismType: configuration.MechanismType,
 		id:            shortid.MustNew(1, shortid.DefaultABC, rand.Uint64()),
-		pciAddresses:  endpointPciAddresses,
+		pciAddresses:  configuration.EndpointPciAddresses,
 	}
 	if self.mechanismType == "" {
 		self.mechanismType = kernel.MECHANISM

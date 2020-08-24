@@ -50,7 +50,7 @@ type NSConfiguration struct {
 	Routes                 []string
 	PodName                string
 	Namespace              string
-	PciAddress             string
+	PciAddresses           string
 	EndpointPciAddresses   string
 }
 
@@ -150,17 +150,6 @@ func (configuration *NSConfiguration) FromNSUrl(url *tools.NSUrl) *NSConfigurati
 		labels.WriteString(v[0])
 	}
 	configuration.ClientLabels = labels.String()
-	return configuration
-}
-
-func (configuration *NSConfiguration) GetPciAddress(pciAddresses []string, index int) *NSConfiguration {
-	if configuration == nil {
-		return nil
-	}
-	if len(pciAddresses) < (index + 1) {
-		return configuration
-	}
-	configuration.PciAddress = pciAddresses[index]
 	return configuration
 }
 

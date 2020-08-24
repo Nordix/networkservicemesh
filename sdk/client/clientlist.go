@@ -116,7 +116,7 @@ func NewNSMClientList(ctx context.Context, configuration *common.NSConfiguration
 					client: client}},
 		}, nil
 	}
-	pciAddresses := tools.ParsePciEnvVariable(pciDeviceEnv)
+	configuration.PciAddresses = tools.ParsePciEnvVariable(pciDeviceEnv)
 	urls, err := tools.ParseAnnotationValue(annotationValue)
 	if err != nil {
 		logrus.Errorf("Bad annotation value: %v", err)
@@ -124,9 +124,8 @@ func NewNSMClientList(ctx context.Context, configuration *common.NSConfiguration
 	}
 
 	var clients []nsmClientListEntry
-	for index, url := range urls {
+	for _, url := range urls {
 		configuration = configuration.FromNSUrl(url)
-		configuration = configuration.GetPciAddress(pciAddresses, index)
 		client, err := NewNSMClient(ctx, configuration)
 		if err != nil {
 			return nil, err
