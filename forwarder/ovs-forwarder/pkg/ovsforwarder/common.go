@@ -329,7 +329,7 @@ func CheckNetRepAvailability(netRep string) (bool, error) {
 	return availNetRep, nil
 }
 
-func PickDeviceAndNetRep(DeviceIDs string) (DeviceID, NetRep, error){
+func PickDeviceAndNetRep(DeviceIDs string) (string, string, error){
 	var availNetRep = false
 	for _, devID := range strings.Split(DeviceIDs, ",") {
 		netRep, err := sriov.GetNetRepresentor(devID)
