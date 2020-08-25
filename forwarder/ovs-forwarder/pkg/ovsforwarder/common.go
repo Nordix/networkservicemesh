@@ -18,6 +18,7 @@ package ovsforwarder
 
 import (
 	"net"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -30,11 +31,14 @@ import (
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connectioncontext"
 	"github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/sriov"
 	"github.com/networkservicemesh/networkservicemesh/utils/fs"
+	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/ovsutils"
 )
 
 const (
 	cVETHMTU = 16000
 )
+
+var DevIDMap = make(map[string]string)
 
 // SetupInterface - setup interface to namespace
 func SetupInterface(ifaceName string, conn *connection.Connection, isDst bool) (string, error) {
@@ -314,4 +318,35 @@ func GetLocalConnectionConfig(c *connection.Connection, ovsPortName string, isDs
 		NetRepDevice: ovsPortName,
 		IPAddress:    ipAddress,
 	}
+}
+
+func CheckNetRepAvailability(netRep string) (bool, error) {
+	availNetRep, err := CheckNetRepOvs(netRep)
+	if err !=nil {
+		return false, err
+	}
+
+	return availNetRep, nil
+}
+
+func PickDeviceAndNetRep(DeviceIDs string) (DeviceID, NetRep, error){
+	var availNetRep = false
+	for _, devID := range strings.Split(DeviceIDs, ",") {
+		netRep, err := sriov.GetNetRepresentor(devID)
+		if err != nil {
+			return "", "", err
+		}
+		availNetRep, err = CheckNetRepAvailability(netRep)
+		if err !=nil{
+			return "", "", err
+		}
+		if availNetRep {
+			return devID, netRep, nil
+		}	
+	}		
+	if !availNetRep {
+		err = errors.New("local: Could not find available Net Rep")
+		return "","", err
+	}
+
 }

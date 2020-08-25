@@ -86,9 +86,10 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	defer runtime.UnlockOSThread()
 
 	var deviceID, netRep string
-	deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]
+	deviceIDs, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddresses]
 	if ok {
-		if netRep, err = sriov.GetNetRepresentor(deviceID); err != nil {
+		deviceID, netRep, err = PickDeviceAndNetRep(deviceIDs)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -119,6 +120,8 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 		return nil, err
 	}
 
+	DevIDMap["rem-" + connID] = deviceID
+
 	logrus.Infof("remote: creation completed for device - %s", ifaceName)
 	return map[string]monitoring.Device{nsInode: {Name: ifaceName, XconName: xconName}}, nil
 }
@@ -145,7 +148,7 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	}
 
 	var deviceID, netRep string
-	deviceID, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddress]
+	deviceID, ok := DevIDMap["rem-" + connID]
 	if ok {
 		netRep, err = sriov.GetNetRepresentorWithRetries(deviceID, 5)
 		if err != nil {
@@ -169,6 +172,8 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 		logrus.Errorf("remote: %v", err)
 	}
 
+	delete(DevIDMap,"rem-" + connID)
+	
 	logrus.Infof("remote: deletion completed for device - %s", ifaceName)
 	return map[string]monitoring.Device{nsInode: {Name: ifaceName, XconName: xconName}}, nil
 }
