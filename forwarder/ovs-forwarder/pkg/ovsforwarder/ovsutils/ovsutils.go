@@ -18,6 +18,7 @@ package ovsutils
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 )
@@ -34,4 +35,22 @@ func GetInterfaceOfPort(interfaceName string) (int, error) {
 	}
 	portNo, err := strconv.Atoi(ofPort)
 	return portNo, nil
+}
+
+func CheckNetRepOvs(netRep string) (bool, error) {
+	specialChar := []string{"name", ":", "\"", " "}
+    ovsPorts, _, err := util.RunOVSVsctl("--columns=name", "list", "Interface")
+	if err != nil {
+		return false, err
+	}
+	for _, char := range specialChar {
+        ovsPorts = strings.ReplaceAll(ovsPorts, char,"")
+	}
+	ovsPorts = strings.ReplaceAll(ovsPorts, "\n\n",",")
+	for _, attachedNetRep := range strings.Split(ovsPorts, ","){
+		if netRep == attachedNetRep {
+			return false, nil
+		}
+	}
+	return true, nil
 }
