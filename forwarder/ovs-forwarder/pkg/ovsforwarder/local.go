@@ -69,12 +69,12 @@ func (o *OvSForwarder) initInterface(deviceID, deviceNetRep string, crossConnect
 		ovsPortName = srcPrefix + crossConnect.GetId()
 	}
 	if deviceID != "" {
-		vfInterfaceConfig = GetLocalConnectionConfig(conn, deviceNetRep, isDst)
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, deviceID, deviceNetRep, isDst)
 		if err := sriov.SetupVF(vfInterfaceConfig); err != nil {
 			return nil, err
 		}
 	} else {
-		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, "", ovsPortName, isDst)
 		if err := CreateInterfaces(vfInterfaceConfig.Name, ovsPortName); err != nil {
 			return nil, err
 		}
@@ -96,12 +96,12 @@ func (o *OvSForwarder) releaseInterface(device, ovsPortName string, crossConnect
 		conn = crossConnect.GetSource()
 	}
 	if device != "" {
-		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, device, ovsPortName, isDst)
 		if err := sriov.ResetVF(vfInterfaceConfig); err != nil {
 			logrus.Errorf("local: %v", err)
 		}
 	} else {
-		vfInterfaceConfig = GetLocalConnectionConfig(conn, ovsPortName, isDst)
+		vfInterfaceConfig = GetLocalConnectionConfig(conn, "", ovsPortName, isDst)
 		if _, err := ClearInterfaceSetup(vfInterfaceConfig.Name, conn); err != nil {
 			logrus.Errorf("local: %v", err)
 		}
@@ -161,8 +161,8 @@ func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossCon
 		return nil, err
 	}
 
-	DevIDMap["src-" + crossConnect.GetId()] = srcDeviceID
-	DevIDMap["dst-" + crossConnect.GetId()] = dstDeviceID
+	DevIDMap["src-"+crossConnect.GetId()] = srcDeviceID
+	DevIDMap["dst-"+crossConnect.GetId()] = dstDeviceID
 
 	logrus.Infof("local: creation completed for devices - source: %s, destination: %s", srcName, dstName)
 
@@ -180,14 +180,14 @@ func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossCon
 
 	var err error
 	var srcNetRep, dstNetRep string
-	srcDeviceID, isPresent := DevIDMap["src-" + crossConnect.GetId()]
+	srcDeviceID, isPresent := DevIDMap["src-"+crossConnect.GetId()]
 	if isPresent {
 		srcNetRep, err = sriov.GetNetRepresentorWithRetries(srcDeviceID, 5)
 		if err != nil {
 			logrus.Errorf("local: error occured while retrieving srcNetRep for %s, error %v", srcDeviceID, err)
 		}
 	}
-	dstDeviceID, isPresent := DevIDMap["dst-" + crossConnect.GetId()]
+	dstDeviceID, isPresent := DevIDMap["dst-"+crossConnect.GetId()]
 	if isPresent {
 		dstNetRep, err = sriov.GetNetRepresentorWithRetries(dstDeviceID, 5)
 		if err != nil {
@@ -217,8 +217,8 @@ func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossCon
 	dstName := interfaceConfig.Name
 	dstNetNsInode := interfaceConfig.TargetNetns
 
-	delete(DevIDMap,"src-" + crossConnect.GetId())
-	delete(DevIDMap,"dst-" + crossConnect.GetId())
+	delete(DevIDMap, "src-"+crossConnect.GetId())
+	delete(DevIDMap, "dst-"+crossConnect.GetId())
 
 	logrus.Infof("local: deletion completed for devices - source: %s, destination: %s", srcName, dstName)
 	srcDevice := monitoring.Device{Name: srcName, XconName: "SRC-" + crossConnect.GetId()}
