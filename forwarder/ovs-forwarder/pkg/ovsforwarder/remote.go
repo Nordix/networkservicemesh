@@ -120,7 +120,7 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 		return nil, err
 	}
 
-	DevIDMap["rem-" + connID] = deviceID
+	DevIDMap["rem-"+connID] = deviceID
 
 	logrus.Infof("remote: creation completed for device - %s", ifaceName)
 	return map[string]monitoring.Device{nsInode: {Name: ifaceName, XconName: xconName}}, nil
@@ -148,7 +148,7 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	}
 
 	var deviceID, netRep string
-	deviceID, ok := DevIDMap["rem-" + connID]
+	deviceID, ok := DevIDMap["rem-"+connID]
 	if ok {
 		netRep, err = sriov.GetNetRepresentorWithRetries(deviceID, 5)
 		if err != nil {
@@ -172,8 +172,8 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 		logrus.Errorf("remote: %v", err)
 	}
 
-	delete(DevIDMap,"rem-" + connID)
-	
+	delete(DevIDMap, "rem-"+connID)
+
 	logrus.Infof("remote: deletion completed for device - %s", ifaceName)
 	return map[string]monitoring.Device{nsInode: {Name: ifaceName, XconName: xconName}}, nil
 }
@@ -184,9 +184,9 @@ func (o *OvSForwarder) initLocalInterface(deviceID, deviceNetRep, connID string,
 	var vfInterfaceConfig sriov.VFInterfaceConfiguration
 	ovsPortName := "tap_" + connID
 	if deviceID != "" {
-		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, deviceNetRep, direction)
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, deviceID, deviceNetRep, direction)
 	} else {
-		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, ovsPortName, direction)
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, "", ovsPortName, direction)
 		if err := CreateInterfaces(vfInterfaceConfig.Name, ovsPortName); err != nil {
 			return nil, err
 		}
@@ -218,12 +218,12 @@ func (o *OvSForwarder) releaseLocalInterface(device, ovsPortName string, localCo
 	var vfInterfaceConfig sriov.VFInterfaceConfiguration
 
 	if device != "" {
-		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, ovsPortName, direction)
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, device, ovsPortName, direction)
 		if err := sriov.ResetVF(vfInterfaceConfig); err != nil {
 			logrus.Errorf("remote: %v", err)
 		}
 	} else {
-		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, ovsPortName, direction)
+		vfInterfaceConfig = GetLocalConnectionConfig(localConnection, "", ovsPortName, direction)
 		if _, err := ClearInterfaceSetup(vfInterfaceConfig.Name, localConnection); err != nil {
 			logrus.Errorf("remote: %v", err)
 		}

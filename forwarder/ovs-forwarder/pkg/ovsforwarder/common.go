@@ -27,11 +27,10 @@ import (
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/common"
-	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connectioncontext"
+	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/ovsutils"
 	"github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/sriov"
 	"github.com/networkservicemesh/networkservicemesh/utils/fs"
-	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/ovsutils"
 )
 
 const (
@@ -298,7 +297,7 @@ func DeleteInterface(ifaceName string) error {
 }
 
 // GetLocalConnectionConfig returns VF Interface configuration
-func GetLocalConnectionConfig(c *connection.Connection, ovsPortName string, isDst bool) sriov.VFInterfaceConfiguration {
+func GetLocalConnectionConfig(c *connection.Connection, deviceID, ovsPortName string, isDst bool) sriov.VFInterfaceConfiguration {
 	name, ok := c.GetMechanism().GetParameters()[common.InterfaceNameKey]
 	if !ok {
 		name = c.GetMechanism().GetParameters()[common.Workspace]
@@ -312,7 +311,7 @@ func GetLocalConnectionConfig(c *connection.Connection, ovsPortName string, isDs
 	}
 
 	return sriov.VFInterfaceConfiguration{
-		PciAddress:   c.GetMechanism().GetParameters()[kernel.PciAddress],
+		PciAddress:   deviceID,
 		TargetNetns:  c.GetMechanism().GetParameters()[common.NetNsInodeKey],
 		Name:         name,
 		NetRepDevice: ovsPortName,
@@ -320,33 +319,33 @@ func GetLocalConnectionConfig(c *connection.Connection, ovsPortName string, isDs
 	}
 }
 
+// CheckNetRepAvailability check if net device is already attached with any one of ovs bridges
 func CheckNetRepAvailability(netRep string) (bool, error) {
 	availNetRep, err := CheckNetRepOvs(netRep)
-	if err !=nil {
+	if err != nil {
 		return false, err
 	}
 
 	return availNetRep, nil
 }
 
-func PickDeviceAndNetRep(DeviceIDs string) (string, string, error){
+// PickDeviceAndNetRep returns the available device id with its net representor
+func PickDeviceAndNetRep(deviceIDs string) (string, string, error) {
 	var availNetRep = false
-	for _, devID := range strings.Split(DeviceIDs, ",") {
+	for _, devID := range strings.Split(deviceIDs, ",") {
 		netRep, err := sriov.GetNetRepresentor(devID)
 		if err != nil {
-			return "", "", err
+			logrus.Infof("net representor is not found for device %s, error %v", devID, err)
+			continue
 		}
 		availNetRep, err = CheckNetRepAvailability(netRep)
-		if err !=nil{
-			return "", "", err
+		if err != nil {
+			logrus.Infof("error occured while checking net representor status %s, error %v", netRep, err)
+			continue
 		}
 		if availNetRep {
 			return devID, netRep, nil
-		}	
-	}		
-	if !availNetRep {
-		err = errors.New("local: Could not find available Net Rep")
-		return "","", err
+		}
 	}
-
+	return "", "", errors.Errorf("could not find net representor from deviceIDs %s", deviceIDs)
 }
