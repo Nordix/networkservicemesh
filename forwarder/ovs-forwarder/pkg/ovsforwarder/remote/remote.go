@@ -18,16 +18,17 @@
 package remote
 
 import (
-	"sync"
 	"fmt"
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
-	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/vxlan"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/vxlan"
 	. "github.com/networkservicemesh/networkservicemesh/forwarder/ovs-forwarder/pkg/ovsforwarder/ovsutils"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 )
 
 // INCOMING, OUTGOING - packet direction constants
@@ -38,14 +39,14 @@ const (
 
 // Connect - struct with remote mechanism interfaces creation and deletion methods
 type Connect struct {
-	vxlanInterfacesMutex  sync.Mutex
-	vxlanInterfaces 	  map[string]int
+	vxlanInterfacesMutex sync.Mutex
+	vxlanInterfaces      map[string]int
 }
 
 // NewConnect - creates instance of remote Connect
 func NewConnect() *Connect {
 	return &Connect{
-		vxlanInterfaces:   make(map[string]int),
+		vxlanInterfaces: make(map[string]int),
 	}
 }
 
@@ -77,36 +78,47 @@ func (c *Connect) SetupOvSConnection(ovsLocalPort, ovsTunnelPort string, vni int
 	}
 	ovsLocalPortNum, err := GetInterfaceOfPort(ovsLocalPort)
 	if err != nil {
-		logrus.Errorf("Failed to get OVS port number for %s interface,"+ 
-					  " error: %v", ovsLocalPort, err)
+		logrus.Errorf("Failed to get OVS port number for %s interface,"+
+			" error: %v", ovsLocalPort, err)
 		return err
 	}
 	ovsTunnelPortNum, err := GetInterfaceOfPort(ovsTunnelPort)
 	if err != nil {
-		logrus.Errorf("Failed to get OVS port number for %s interface,"+ 
-					  " error: %v", ovsTunnelPort, err)
+		logrus.Errorf("Failed to get OVS port number for %s interface,"+
+			" error: %v", ovsTunnelPort, err)
 		return err
 	}
 
 	stdout, stderr, err = util.RunOVSOfctl("add-flow", kernel.BridgeName, fmt.Sprintf("priority=100, in_port=%d, actions=set_field:%d->tun_id,output:%d",
-											ovsLocalPortNum,vni, ovsTunnelPortNum))
+		ovsLocalPortNum, vni, ovsTunnelPortNum))
 	if err != nil {
-		fmt.Printf("Failed to add flow on %s for port %s stdout: %q"+
-			" stderr: %q, error: %v", kernel.BridgeName, ovsLocalPort, stdout, stderr, err)
+		logrus.Errorf("Failed to add representor flow on %s for port %s stdout: %s"+
+			" stderr: %s, error: %v", kernel.BridgeName, ovsLocalPort, stdout, stderr, err)
 		return err
 	} else {
 		PortMap[ovsLocalPort] = ovsLocalPortNum
 	}
 
+	if stderr != "" {
+		logrus.Errorf("Failed to add representor flow on %s for port %s stdout: %s"+
+			" stderr: %s", kernel.BridgeName, ovsLocalPort, stdout, stderr)
+	}
+
 	stdout, stderr, err = util.RunOVSOfctl("add-flow", kernel.BridgeName, fmt.Sprintf("priority=100, in_port=%d, "+
-	"tun_id=%d,actions=output:%d", ovsTunnelPortNum,vni, ovsLocalPortNum))
+		"tun_id=%d,actions=output:%d", ovsTunnelPortNum, vni, ovsLocalPortNum))
 	if err != nil {
-		fmt.Printf("Failed to add flow on %s for port %s stdout: %q"+
-			" stderr: %q, error: %v", kernel.BridgeName, ovsTunnelPort, stdout, stderr, err)
+		logrus.Errorf("Failed to add tunnel flow on %s for port %s stdout: %s"+
+			" stderr: %s, error: %v", kernel.BridgeName, ovsTunnelPort, stdout, stderr, err)
 		return err
 	} else {
 		PortMap[ovsTunnelPort] = ovsTunnelPortNum
 	}
+
+	if stderr != "" {
+		logrus.Errorf("Failed to add tunnel flow on %s for port %s stdout: %s"+
+			" stderr: %s", kernel.BridgeName, ovsTunnelPort, stdout, stderr)
+	}
+
 	return nil
 }
 
@@ -121,12 +133,12 @@ func (c *Connect) DeleteLocalOvSConnection(ovsLocalPort, ovsTunnelPort string, v
 		logrus.Errorf("Failed to delete flow on %s for port "+
 			"%s, stdout: %q, stderr: %q, error: %v", kernel.BridgeName, ovsLocalPort, stdout, stderr, err)
 	}
-	if exists := PortMap[ovsTunnelPort]; exists != 0{
+	if exists := PortMap[ovsTunnelPort]; exists != 0 {
 		ovsTunnelPortNum := PortMap[ovsTunnelPort]
 		stdout, stderr, err = util.RunOVSOfctl("del-flows", kernel.BridgeName, fmt.Sprintf("in_port=%d,tun_id=%d", ovsTunnelPortNum, vni))
 		if err != nil {
 			logrus.Errorf("Failed to delete flow on %s for port "+
-				"%s on VNI %d, stdout: %q, stderr: %q, error: %v", kernel.BridgeName, ovsTunnelPort,vni, stdout, stderr, err)
+				"%s on VNI %d, stdout: %q, stderr: %q, error: %v", kernel.BridgeName, ovsTunnelPort, vni, stdout, stderr, err)
 		}
 	}
 

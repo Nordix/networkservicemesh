@@ -19,6 +19,7 @@ package ovsforwarder
 import (
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -38,6 +39,8 @@ const (
 )
 
 var DevIDMap = make(map[string]string)
+
+var localRemoteMutex = &sync.Mutex{}
 
 // SetupInterface - setup interface to namespace
 func SetupInterface(ifaceName string, conn *connection.Connection, isDst bool) (string, error) {
