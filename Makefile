@@ -17,10 +17,10 @@ SHELL:=/bin/bash
 WORKER_COUNT ?= 1
 
 # Set a default forwarding plane
-FORWARDING_PLANE ?= vpp
+FORWARDING_PLANE ?= ovs
 
 # Set a default network service for Example clients
-NETWORK_SERVICE ?= icmp-responder
+NETWORK_SERVICE ?= testpmd-forwarder
 
 # Default target, no other targets should be before default
 .PHONY: default
