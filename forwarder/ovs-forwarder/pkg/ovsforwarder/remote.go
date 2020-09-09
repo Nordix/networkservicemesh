@@ -17,8 +17,6 @@
 package ovsforwarder
 
 import (
-	"runtime"
-
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -81,9 +79,8 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	var nsInode string
 	var err error
 
-	/* Lock the OS thread so we don't accidentally switch namespaces */
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	localRemoteMutex.Lock()
+	defer localRemoteMutex.Unlock()
 
 	var deviceID, netRep string
 	deviceIDs, ok := localConnection.GetMechanism().GetParameters()[kernel.PciAddresses]
@@ -137,9 +134,8 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 		xconName = "SRC-" + connID
 	}
 
-	/* Lock the OS thread so we don't accidentally switch namespaces */
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	localRemoteMutex.Lock()
+	defer localRemoteMutex.Unlock()
 
 	vni, ovsTunnelName, err := o.remoteConnect.GetTunnelParameters(remoteConnection, direction)
 	if err != nil {
@@ -150,7 +146,7 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	var deviceID, netRep string
 	deviceID, ok := DevIDMap["rem-"+connID]
 	if ok {
-		netRep, err = sriov.GetNetRepresentorWithRetries(deviceID, 5)
+		netRep, err = sriov.GetNetRepresentor(deviceID)
 		if err != nil {
 			logrus.Errorf("remote: error occured while retrieving netRep for %s, error %v", deviceID, err)
 		}

@@ -1,7 +1,6 @@
 package sriov
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -31,35 +30,6 @@ var VfNameMap = make(map[string]string)
 
 // GetNetRepresentor retrieves network representor device for smartvf
 func GetNetRepresentor(deviceID string) (string, error) {
-	return GetNetRepresentorWithRetries(deviceID, 1)
-}
-
-// GetNetRepresentorWithRetries retrieves network representor device for smartvf
-// Retries are needed when client/endpoint containers are deleted, vfNetdevices
-// returns as empty due to vf device net directory is neither in host net namespace
-// nor in container net namespace.
-func GetNetRepresentorWithRetries(deviceID string, maxRetries int) (string, error) {
-	if maxRetries == 0 {
-		return "", errors.Errorf("maxRetries can not be zero")
-	}
-	// get smart VF netdevice from PCI
-	done := false
-	for maxRetries > 0 && !done {
-		vfNetdevices, err := sriovnet.GetNetDevicesFromPci(deviceID)
-		if err != nil {
-			return "", err
-		}
-		maxRetries = maxRetries - 1
-		// Make sure we have 1 netdevice per pci address
-		if len(vfNetdevices) != 1 && maxRetries == 0 {
-			return "", fmt.Errorf("failed to get one netdevice interface per %s", deviceID)
-		} else if len(vfNetdevices) != 1 {
-			// Retry after 2 seconds
-			time.Sleep(2 * time.Second)
-		} else {
-			done = true
-		}
-	}
 	// get Uplink netdevice.  The uplink is basically the PF name of the deviceID (smart VF).
 	// The uplink is later used to retrieve the representor for the smart VF.
 	uplink, err := sriovnet.GetUplinkRepresentor(deviceID)
@@ -105,50 +75,50 @@ func SetupVF(config VFInterfaceConfiguration) error {
 	// get network namespace handle
 	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
 	if err != nil {
-		return errors.Wrap(err, "failed to setup VF")
+		return errors.Wrap(err, "failed to setup VF: GetNsHandleFromInode")
 	}
 	defer targetNetns.Close()
 
 	// get VF link representor
 	link, err := GetLink(config.PciAddress, config.Name, hostNetns, targetNetns)
 	if err != nil {
-		return errors.Wrap(err, "failed to setup VF")
+		return errors.Wrap(err, "failed to setup VF: GetLink")
 	}
 
 	origName, err := link.GetName()
 	if err != nil {
-		return errors.Wrap(err, "failed to setup VF")
+		return errors.Wrap(err, "failed to setup VF: GetName")
 	}
 	VfNameMap[config.PciAddress] = origName
 
 	// move link into pod's network namespace
 	err = link.MoveToNetns(targetNetns)
 	if err != nil {
-		return errors.Wrap(err, "failed to setup VF")
+		return errors.Wrap(err, "failed to setup VF: MoveToNetns")
 	}
 
 	// switch to pod's network namespace to apply configuration, link is already there
 	err = netns.Set(targetNetns)
 	if err != nil {
-		return errors.Wrap(err, "failed to setup VF")
+		return errors.Wrap(err, "failed to setup VF: Set")
 	}
 
 	// add IP address
 	err = link.AddAddress(config.IPAddress)
 	if err != nil {
-		return errors.Wrap(err, "failed to setup VF")
+		return errors.Wrap(err, "failed to setup VF: AddAddress")
 	}
 
 	// set new interface name
 	err = link.SetName(config.Name)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to setup VF: AddAddress")
 	}
 
 	// bring up the link
 	err = link.SetAdminState(UP)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to setup VF: SetAdminState")
 	}
 
 	return nil
@@ -163,11 +133,41 @@ func ResetVF(config VFInterfaceConfiguration) error {
 		return errors.Errorf("failed to get host namespace: %v", err)
 	}
 	defer hostNetns.Close()
+	var link Link
+	// Move the VF into host network namespace if its not done already and ignore the errors
+	// as pod can be deleted at any time by kubelet.
+	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
+	if err == nil {
+		defer targetNetns.Close()
+		// get VF link representor
+		link, err = GetLink(config.PciAddress, config.Name, targetNetns)
+		if link != nil {
+			// switch to pod's network namespace to apply configuration, link is already there
+			err = netns.Set(targetNetns)
+			if err == nil {
+				// delete IP address
+				link.DeleteAddress(config.IPAddress)
+				// move the link into host network namespace
+				link.MoveToNetns(hostNetns)
+			}
+			// switch to host namespace
+			netns.Set(hostNetns)
+		}
+	}
 
-	// get VF link representor
-	link, err := GetLink(config.PciAddress, config.Name, hostNetns)
-	if err != nil {
-		return errors.Wrap(err, "failed to release VF")
+	// get VF link representor on the host network namespace. Try for 10s until its available.
+	count := 5
+	for count > 0 {
+		link, err = GetLink(config.PciAddress, config.Name, hostNetns)
+		if err != nil {
+			count = count - 1
+			if count == 0 {
+				return errors.Wrap(err, "failed to release VF: : GetLink on hostNetns")
+			}
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
 	}
 
 	if origName, found := VfNameMap[config.PciAddress]; found {
@@ -175,7 +175,7 @@ func ResetVF(config VFInterfaceConfiguration) error {
 		// set to original interface name
 		err = link.SetName(origName)
 		if err != nil {
-			return errors.Wrap(err, "failed to release VF")
+			return errors.Wrap(err, "failed to release VF: SetName")
 		}
 	}
 

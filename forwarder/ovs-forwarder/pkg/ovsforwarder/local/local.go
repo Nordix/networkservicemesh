@@ -19,6 +19,7 @@ package local
 
 import (
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection/mechanisms/kernel"
@@ -66,22 +67,33 @@ func (c *Connect) SetupLocalOvSConnection(srcOvsPort, dstOvsPort string) error {
 	stdout, stderr, err = util.RunOVSOfctl("add-flow", kernel.BridgeName, fmt.Sprintf("priority=100, in_port=%d,"+
 		" actions=output:%d", srcPort, dstPort))
 	if err != nil {
-		logrus.Errorf("Failed to add flow on %s for port %s stdout: %q"+
-			" stderr: %q, error: %v", kernel.BridgeName, srcOvsPort, stdout, stderr, err)
+		logrus.Errorf("Failed to add flow on %s for port %s stdout: %s"+
+			" stderr: %s, error: %v", kernel.BridgeName, srcOvsPort, stdout, stderr, err)
 		return err
 	} else {
 		PortMap[srcOvsPort] = srcPort
 	}
 
+	if stderr != "" {
+		logrus.Errorf("Failed to add flow on %s for port %s stdout: %s"+
+			" stderr: %s", kernel.BridgeName, srcOvsPort, stdout, stderr)
+	}
+
 	stdout, stderr, err = util.RunOVSOfctl("add-flow", kernel.BridgeName, fmt.Sprintf("priority=100, in_port=%d,"+
 		" actions=output:%d", dstPort, srcPort))
 	if err != nil {
-		logrus.Errorf("Failed to add flow on %s for port %s stdout: %q"+
-			" stderr: %q, error: %v", kernel.BridgeName, dstOvsPort, stdout, stderr, err)
+		logrus.Errorf("Failed to add flow on %s for port %s stdout: %s"+
+			" stderr: %s, error: %v", kernel.BridgeName, dstOvsPort, stdout, stderr, err)
 		return err
 	} else {
 		PortMap[dstOvsPort] = dstPort
 	}
+
+	if stderr != "" {
+		logrus.Errorf("Failed to add flow on %s for port %s stdout: %s"+
+			" stderr: %s", kernel.BridgeName, dstOvsPort, stdout, stderr)
+	}
+
 	return nil
 }
 

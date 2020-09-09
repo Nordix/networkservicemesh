@@ -17,8 +17,6 @@
 package ovsforwarder
 
 import (
-	"runtime"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
@@ -115,9 +113,9 @@ func (o *OvSForwarder) releaseInterface(device, ovsPortName string, crossConnect
 // createLocalConnection handles creating a local connection
 func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossConnect) (map[string]monitoring.Device, error) {
 	logrus.Info("local: creating connection...")
-	/* Lock the OS thread so we don't accidentally switch namespaces */
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+
+	localRemoteMutex.Lock()
+	defer localRemoteMutex.Unlock()
 
 	var srcNetRep, dstNetRep, srcDeviceID, dstDeviceID string
 	var err error
@@ -174,22 +172,22 @@ func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossCon
 // deleteLocalConnection handles deleting a local connection
 func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossConnect) (map[string]monitoring.Device, error) {
 	logrus.Info("local: deleting connection...")
-	/* Lock the OS thread so we don't accidentally switch namespaces */
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+
+	localRemoteMutex.Lock()
+	defer localRemoteMutex.Unlock()
 
 	var err error
 	var srcNetRep, dstNetRep string
 	srcDeviceID, isPresent := DevIDMap["src-"+crossConnect.GetId()]
 	if isPresent {
-		srcNetRep, err = sriov.GetNetRepresentorWithRetries(srcDeviceID, 5)
+		srcNetRep, err = sriov.GetNetRepresentor(srcDeviceID)
 		if err != nil {
 			logrus.Errorf("local: error occured while retrieving srcNetRep for %s, error %v", srcDeviceID, err)
 		}
 	}
 	dstDeviceID, isPresent := DevIDMap["dst-"+crossConnect.GetId()]
 	if isPresent {
-		dstNetRep, err = sriov.GetNetRepresentorWithRetries(dstDeviceID, 5)
+		dstNetRep, err = sriov.GetNetRepresentor(dstDeviceID)
 		if err != nil {
 			logrus.Errorf("local: error occured while retrieving dstNetRep for %s, error %v", dstDeviceID, err)
 		}
