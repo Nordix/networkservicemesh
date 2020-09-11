@@ -157,6 +157,12 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 		ovsPortName = netRep
 	} else {
 		ovsPortName = "tap_" + connID
+		portNotExists, _ := CheckNetRepAvailability(ovsPortName)
+		if portNotExists {
+			logrus.Infof("remote: port %s doesn't exist in ovs bridge, returning", ovsPortName)
+			return nil, nil
+		}
+
 	}
 	o.remoteConnect.DeleteLocalOvSConnection(ovsPortName, ovsTunnelName, vni)
 
