@@ -154,11 +154,16 @@ func (vf *vfLink) SetAdminState(state LinkStatus) error {
 }
 
 func (vf *vfLink) SetName(name string) error {
-	if vf.link.Attrs().Name != name {
-		err := netlink.LinkSetName(vf.link, name)
-		if err != nil {
-			return errors.Errorf("failed to set interface name to %s: %s", name, err)
-		}
+	if err := netlink.LinkSetDown(vf.link); err != nil {
+		return errors.Errorf("SetName: LinkSetDown fails %s: %v", name, err)
+	}
+	err := netlink.LinkSetName(vf.link, name)
+	if err != nil {
+		return errors.Errorf("failed to set interface name to %s: %v", name, err)
+	}
+
+	if err := netlink.LinkSetUp(vf.link); err != nil {
+		return errors.Errorf("SetName: LinkSetUp fails %s: %v", name, err)
 	}
 
 	return nil
@@ -211,6 +216,10 @@ func searchByName(ns netns.NsHandle, name, pciAddress string) (netlink.Link, err
 	err := netns.Set(ns)
 	if err != nil {
 		return nil, errors.Errorf("failed to switch to namespace: %s", err)
+	}
+
+	if name == "" {
+		return nil, nil
 	}
 
 	// get link

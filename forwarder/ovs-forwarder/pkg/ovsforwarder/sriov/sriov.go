@@ -80,7 +80,7 @@ func SetupVF(config VFInterfaceConfiguration) error {
 	defer targetNetns.Close()
 
 	// get VF link representor
-	link, err := GetLink(config.PciAddress, config.Name, hostNetns, targetNetns)
+	link, err := GetLink(config.PciAddress, "", hostNetns)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup VF: GetLink")
 	}
@@ -139,6 +139,8 @@ func ResetVF(config VFInterfaceConfiguration) error {
 	targetNetns, err := fs.GetNsHandleFromInode(config.TargetNetns)
 	if err == nil {
 		defer targetNetns.Close()
+		// switch to pod namespace
+		netns.Set(targetNetns)
 		// get VF link representor
 		link, err = GetLink(config.PciAddress, config.Name, targetNetns)
 		if link != nil {
@@ -150,15 +152,15 @@ func ResetVF(config VFInterfaceConfiguration) error {
 				// move the link into host network namespace
 				link.MoveToNetns(hostNetns)
 			}
-			// switch to host namespace
-			netns.Set(hostNetns)
 		}
+		// switch to host namespace
+		netns.Set(hostNetns)
 	}
 
 	// get VF link representor on the host network namespace. Try for 10s until its available.
 	count := 5
 	for count > 0 {
-		link, err = GetLink(config.PciAddress, config.Name, hostNetns)
+		link, err = GetLink(config.PciAddress, "", hostNetns)
 		if err != nil {
 			count = count - 1
 			if count == 0 {
