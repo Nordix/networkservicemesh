@@ -49,10 +49,12 @@ func GetLink(pciAddress, name string, namespaces ...netns.NsHandle) (Link, error
 	}
 
 	// search for link with a matching name or PCI address in the provided namespaces
+	var availableError error
 	for _, ns := range namespaces {
 		for _, search := range attempts {
 			link, err := search(ns, name, pciAddress)
 			if err != nil {
+				availableError = err
 				continue
 			}
 
@@ -65,7 +67,7 @@ func GetLink(pciAddress, name string, namespaces ...netns.NsHandle) (Link, error
 		}
 	}
 
-	return nil, errors.Errorf("failed to obtain netlink link matching criteria: name=%s or pciAddress=%s", name, pciAddress)
+	return nil, errors.Errorf("failed to obtain netlink link matching criteria: name=%s or pciAddress=%s, error: %v", name, pciAddress, availableError)
 }
 
 func (vf *vfLink) MoveToNetns(target netns.NsHandle) error {
@@ -77,13 +79,13 @@ func (vf *vfLink) MoveToNetns(target netns.NsHandle) error {
 	// set link down
 	err := vf.SetAdminState(DOWN)
 	if err != nil {
-		return errors.Errorf("failed to move link %s to netns: %q", vf.link, err)
+		return errors.Errorf("failed to move link %s to netns: %v", vf.link, err)
 	}
 
 	// set netns
 	err = netlink.LinkSetNsFd(vf.link, int(target))
 	if err != nil {
-		return errors.Errorf("failed to move link %s to netns: %q", vf.link, err)
+		return errors.Errorf("failed to move link %s to netns: %v", vf.link, err)
 	}
 
 	vf.netns = target
@@ -186,12 +188,12 @@ func searchByPCIAddress(ns netns.NsHandle, name, pciAddress string) (netlink.Lin
 
 	netDir := filepath.Join("/sys/bus/pci/devices", pciAddress, "net")
 	if _, err := os.Lstat(netDir); err != nil {
-		return nil, errors.Errorf("no net directory under pci device %s: %q", pciAddress, err)
+		return nil, errors.Errorf("no net directory under pci device %s: %v", pciAddress, err)
 	}
 
 	fInfos, err := ioutil.ReadDir(netDir)
 	if err != nil {
-		return nil, errors.Errorf("failed to read net directory %s: %q", netDir, err)
+		return nil, errors.Errorf("failed to read net directory %s: %v", netDir, err)
 	}
 
 	names := make([]string, 0)

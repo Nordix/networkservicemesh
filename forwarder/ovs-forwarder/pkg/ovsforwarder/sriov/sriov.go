@@ -115,12 +115,6 @@ func SetupVF(config VFInterfaceConfiguration) error {
 		return errors.Wrap(err, "failed to setup VF: AddAddress")
 	}
 
-	// bring up the link
-	err = link.SetAdminState(UP)
-	if err != nil {
-		return errors.Wrap(err, "failed to setup VF: SetAdminState")
-	}
-
 	return nil
 }
 
@@ -152,6 +146,8 @@ func ResetVF(config VFInterfaceConfiguration) error {
 				// move the link into host network namespace
 				link.MoveToNetns(hostNetns)
 			}
+		} else {
+			logrus.Errorf("link is not present in container net namespace %s, %s, %v", config.PciAddress, config.Name, err)
 		}
 		// switch to host namespace
 		netns.Set(hostNetns)
