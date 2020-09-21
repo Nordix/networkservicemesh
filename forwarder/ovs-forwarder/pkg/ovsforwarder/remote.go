@@ -17,6 +17,8 @@
 package ovsforwarder
 
 import (
+	"runtime"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -79,6 +81,10 @@ func (o *OvSForwarder) createRemoteConnection(connID string, localConnection, re
 	var nsInode string
 	var err error
 
+	/* Lock the OS thread so we don't accidentally switch namespaces */
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	localRemoteMutex.Lock()
 	defer localRemoteMutex.Unlock()
 
@@ -133,6 +139,10 @@ func (o *OvSForwarder) deleteRemoteConnection(connID string, localConnection, re
 	} else {
 		xconName = "SRC-" + connID
 	}
+
+	/* Lock the OS thread so we don't accidentally switch namespaces */
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	localRemoteMutex.Lock()
 	defer localRemoteMutex.Unlock()

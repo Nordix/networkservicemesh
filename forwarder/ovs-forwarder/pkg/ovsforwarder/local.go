@@ -17,6 +17,8 @@
 package ovsforwarder
 
 import (
+	"runtime"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connection"
@@ -114,6 +116,10 @@ func (o *OvSForwarder) releaseInterface(device, ovsPortName string, crossConnect
 func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossConnect) (map[string]monitoring.Device, error) {
 	logrus.Info("local: creating connection...")
 
+	/* Lock the OS thread so we don't accidentally switch namespaces */
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	localRemoteMutex.Lock()
 	defer localRemoteMutex.Unlock()
 
@@ -172,6 +178,10 @@ func (o *OvSForwarder) createLocalConnection(crossConnect *crossconnect.CrossCon
 // deleteLocalConnection handles deleting a local connection
 func (o *OvSForwarder) deleteLocalConnection(crossConnect *crossconnect.CrossConnect) (map[string]monitoring.Device, error) {
 	logrus.Info("local: deleting connection...")
+
+	/* Lock the OS thread so we don't accidentally switch namespaces */
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	localRemoteMutex.Lock()
 	defer localRemoteMutex.Unlock()
