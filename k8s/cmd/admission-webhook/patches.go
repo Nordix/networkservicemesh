@@ -42,9 +42,6 @@ func createDNSPatch(tuple *podSpecAndMeta, annotationValue string) (patch []patc
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						"networkservicemesh.io/socket": resource.MustParse("1"),
-						"cpu": resource.MustParse("1"),
-						"memory": resource.MustParse("256Mi"),
-
 					},
 				},
 			},
@@ -64,8 +61,6 @@ func createDNSPatch(tuple *podSpecAndMeta, annotationValue string) (patch []patc
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						"networkservicemesh.io/socket": resource.MustParse("1"),
-						"cpu": resource.MustParse("1"),
-						"memory": resource.MustParse("256Mi"),
 					},
 				},
 			},
@@ -126,8 +121,6 @@ func createNsmInitContainerPatch(target []corev1.Container, annotationValue, dpN
 	var value interface{}
 	initContainerRl := corev1.ResourceList{
 		"networkservicemesh.io/socket": resource.MustParse("1"),
-		"cpu": resource.MustParse("1"),
-		"memory": resource.MustParse("256Mi"),
 	}
 	if dpName != "" {
 		initContainerRl[corev1.ResourceName(dpName)] = resource.MustParse(dpDevices)
@@ -149,8 +142,6 @@ func createNsmInitContainerPatch(target []corev1.Container, annotationValue, dpN
 		Resources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				"networkservicemesh.io/socket": resource.MustParse("1"),
-				"cpu": resource.MustParse("1"),
-				"memory": resource.MustParse("256Mi"),
 			},
 		},
 		Command: []string{"/bin/" + dnsInitContainerDefault},
