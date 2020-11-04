@@ -46,14 +46,16 @@ var localRemoteMutex = &sync.Mutex{}
 func SetupInterface(ifaceName string, conn *connection.Connection, isDst bool) (string, error) {
 	netNsInode := conn.GetMechanism().GetParameters()[common.NetNsInodeKey]
 	neighbors := conn.GetContext().GetIpContext().GetIpNeighbors()
-	var ifaceIP string
+	var ifaceIP, gwIP string
 	var routes []*connectioncontext.Route
 	if isDst {
 		ifaceIP = conn.GetContext().GetIpContext().GetDstIpAddr()
 		routes = conn.GetContext().GetIpContext().GetSrcRoutes()
+		gwIP = conn.GetContext().GetIpContext().GetSrcIpAddr()
 	} else {
 		ifaceIP = conn.GetContext().GetIpContext().GetSrcIpAddr()
 		routes = conn.GetContext().GetIpContext().GetDstRoutes()
+		gwIP = conn.GetContext().GetIpContext().GetDstIpAddr()
 	}
 
 	/* Get namespace handler - source */
@@ -72,7 +74,7 @@ func SetupInterface(ifaceName string, conn *connection.Connection, isDst bool) (
 	logrus.Debug("local: opened source handle: ", nsHandle, netNsInode)
 
 	/* Setup interface - source namespace */
-	if err = setupLinkInNs(nsHandle, ifaceName, ifaceIP, routes, neighbors, true); err != nil {
+	if err = setupLinkInNs(nsHandle, ifaceName, ifaceIP, gwIP, routes, neighbors, true); err != nil {
 		logrus.Errorf("local: failed to setup interface - source - %q: %v", ifaceName, err)
 		return netNsInode, err
 	}
@@ -100,7 +102,7 @@ func ClearInterfaceSetup(ifaceName string, conn *connection.Connection) (string,
 	logrus.Debug("local: opened source handle: ", nsHandle, netNsInode)
 
 	/* Extract interface - source namespace */
-	if err = setupLinkInNs(nsHandle, ifaceName, ifaceIP, nil, nil, false); err != nil {
+	if err = setupLinkInNs(nsHandle, ifaceName, ifaceIP, "", nil, nil, false); err != nil {
 		return "", errors.Errorf("failed to extract interface - source - %q: %v", ifaceName, err)
 	}
 
@@ -126,7 +128,7 @@ func SetInterfacesUp(ifaceNames ...string) error {
 }
 
 // setupLinkInNs is responsible for configuring an interface inside a given namespace - assigns IP address, routes, etc.
-func setupLinkInNs(containerNs netns.NsHandle, ifaceName, ifaceIP string, routes []*connectioncontext.Route, neighbors []*connectioncontext.IpNeighbor, inject bool) error {
+func setupLinkInNs(containerNs netns.NsHandle, ifaceName, ifaceIP, gwIP string, routes []*connectioncontext.Route, neighbors []*connectioncontext.IpNeighbor, inject bool) error {
 	if inject {
 		/* Get a link object for the interface */
 		ifaceLink, err := netlink.LinkByName(ifaceName)
@@ -193,8 +195,14 @@ func setupLinkInNs(containerNs netns.NsHandle, ifaceName, ifaceIP string, routes
 			logrus.Errorf("common: failed to bring %q up: %v", ifaceName, err)
 			return err
 		}
+		/* Parse the GW IP address */
+		gwAddr, err := netlink.ParseAddr(gwIP)
+		if err != nil {
+			logrus.Errorf("common: failed to parse gw IP %q: %v", gwIP, err)
+			return err
+		}
 		/* Add routes */
-		if err = addRoutes(link, addr, routes); err != nil {
+		if err = addRoutes(link, addr, gwAddr, routes); err != nil {
 			logrus.Error("common: failed adding routes:", err)
 			return err
 		}
@@ -219,7 +227,7 @@ func setupLinkInNs(containerNs netns.NsHandle, ifaceName, ifaceIP string, routes
 }
 
 // addRoutes adds routes
-func addRoutes(link netlink.Link, addr *netlink.Addr, routes []*connectioncontext.Route) error {
+func addRoutes(link netlink.Link, addr, gwAddr *netlink.Addr, routes []*connectioncontext.Route) error {
 	for _, route := range routes {
 		_, routeNet, err := net.ParseCIDR(route.GetPrefix())
 		if err != nil {
@@ -233,6 +241,7 @@ func addRoutes(link netlink.Link, addr *netlink.Addr, routes []*connectioncontex
 				Mask: routeNet.Mask,
 			},
 			Src: addr.IP,
+			Gw:  gwAddr.IP,
 		}
 		if err = netlink.RouteAdd(&route); err != nil {
 			logrus.Error("common: failed adding routes:", err)
