@@ -315,11 +315,16 @@ func GetLocalConnectionConfig(c *connection.Connection, deviceID, ovsPortName st
 		name = c.GetMechanism().GetParameters()[common.Workspace]
 	}
 
-	var ipAddress string
+	var ipAddress, gwIPAddress string
+	var routes []*connectioncontext.Route
 	if isDst {
 		ipAddress = c.GetContext().GetIpContext().GetDstIpAddr()
+		routes = c.GetContext().GetIpContext().GetSrcRoutes()
+		gwIPAddress = c.GetContext().GetIpContext().GetSrcIpAddr()
 	} else {
 		ipAddress = c.GetContext().GetIpContext().GetSrcIpAddr()
+		routes = c.GetContext().GetIpContext().GetDstRoutes()
+		gwIPAddress = c.GetContext().GetIpContext().GetDstIpAddr()
 	}
 
 	return sriov.VFInterfaceConfiguration{
@@ -328,6 +333,8 @@ func GetLocalConnectionConfig(c *connection.Connection, deviceID, ovsPortName st
 		Name:         name,
 		NetRepDevice: ovsPortName,
 		IPAddress:    ipAddress,
+		GwIPAddress:  gwIPAddress,
+		Routes:       routes,
 	}
 }
 

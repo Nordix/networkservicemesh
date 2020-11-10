@@ -2,10 +2,13 @@ package sriov
 
 import (
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connectioncontext"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -30,6 +33,7 @@ type Link interface {
 	SetAdminState(state LinkStatus) error
 	SetName(name string) error
 	GetName() (string, error)
+	AddRoute(ip, gwIP string, routes []*connectioncontext.Route) error
 }
 
 // vfLink is Link interface implementation for SR-IOV VF interfaces
@@ -119,6 +123,42 @@ func (vf *vfLink) AddAddress(ip string) error {
 		return errors.Errorf("failed to add IP address %q: %s", ip, err)
 	}
 
+	return nil
+}
+
+func (vf *vfLink) AddRoute(ip, gwIP string, routes []*connectioncontext.Route) error {
+	// parse IP address
+	addr, err := netlink.ParseAddr(ip)
+	if err != nil {
+		return errors.Errorf("failed to parse IP address %q: %s", ip, err)
+	}
+
+	// parse GW IP address
+	gwAddr, err := netlink.ParseAddr(gwIP)
+	if err != nil {
+		return errors.Errorf("failed to parse GW IP address %q: %s", ip, err)
+	}
+
+	for _, route := range routes {
+		_, routeNet, err := net.ParseCIDR(route.GetPrefix())
+		if err != nil {
+			logrus.Error("failed parsing route CIDR:", err)
+			return err
+		}
+		route := netlink.Route{
+			LinkIndex: vf.link.Attrs().Index,
+			Dst: &net.IPNet{
+				IP:   routeNet.IP,
+				Mask: routeNet.Mask,
+			},
+			Src: addr.IP,
+			Gw:  gwAddr.IP,
+		}
+		if err = netlink.RouteAdd(&route); err != nil {
+			logrus.Error("failed adding routes:", err)
+			return err
+		}
+	}
 	return nil
 }
 

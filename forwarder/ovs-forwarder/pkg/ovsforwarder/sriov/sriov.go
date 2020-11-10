@@ -8,6 +8,7 @@ import (
 	"github.com/vishvananda/netns"
 
 	"github.com/Mellanox/sriovnet"
+	"github.com/networkservicemesh/networkservicemesh/controlplane/api/connectioncontext"
 	"github.com/networkservicemesh/networkservicemesh/utils/fs"
 )
 
@@ -20,6 +21,8 @@ type VFInterfaceConfiguration struct {
 	IPAddress    string
 	MacAddress   string
 	TargetNetns  string
+	GwIPAddress  string
+	Routes       []*connectioncontext.Route
 }
 
 // VfNameMap contains the mapping between pci address and its net
@@ -113,6 +116,12 @@ func SetupVF(config VFInterfaceConfiguration) error {
 	err = link.SetName(config.Name)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup VF: AddAddress")
+	}
+
+	// add routes
+	err = link.AddRoute(config.IPAddress, config.GwIPAddress, config.Routes)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup VF: AddRoutes")
 	}
 
 	return nil
